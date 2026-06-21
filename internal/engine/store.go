@@ -21,6 +21,13 @@ func (s *StateStore) Put(sessionID string, ctx provider.SessionContext) {
 	s.items[sessionID] = ctx
 }
 
+func (s *StateStore) Get(sessionID string) (provider.SessionContext, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.items[sessionID]
+	return c, ok
+}
+
 func (s *StateStore) All() []provider.SessionContext {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

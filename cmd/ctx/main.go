@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,17 +12,60 @@ import (
 	"time"
 
 	"github.com/codebyNJ/minimo/internal/engine"
+	"github.com/codebyNJ/minimo/internal/export"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] != "status" {
-		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch]")
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
 		os.Exit(1)
 	}
-	runStatus(os.Args[2:])
+	switch os.Args[1] {
+	case "status":
+		runStatus(os.Args[2:])
+	case "export":
+		runExport(os.Args[2:])
+	default:
+		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
+		os.Exit(1)
+	}
+}
+
+func runExport(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: ctx export <session-id> [--with-content]")
+		os.Exit(1)
+	}
+	sessionID := args[0]
+	withContent := false
+	for _, a := range args[1:] {
+		if a == "--with-content" {
+			withContent = true
+		}
+	}
+
+	e := engine.New()
+	if err := e.Refresh(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+
+	ctx, ok := e.Store.Get(sessionID)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "error: unknown session %q\n", sessionID)
+		os.Exit(1)
+	}
+
+	out := export.Build(ctx, withContent)
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(data))
 }
 
 func runStatus(args []string) {
