@@ -124,7 +124,18 @@ The TUI should visually distinguish exact vs. estimated (e.g. a `~` prefix on es
 
 ### 6. File-change detection must handle truncation/rewrite, not just append
 
-SQLite-backed providers (Cursor) rewrite their backing file rather than append. The `TailCursor.ReadNew()` above already resets to offset 0 when `info.Size() < c.Offset` — call this out explicitly because it's an easy bug to reintroduce if Phase 2's Cursor provider is built without remembering this constraint.
+SQLite-backed providers rewrite their backing file rather than append — confirmed for both Cursor (`state.vscdb`) and **OpenCode** (`opencode.db`, verified as a real WAL-mode SQLite file on this machine, see [Research](Research.md#opencode--ground-truth-verified-by-inspecting-a-real-install-on-this-machine-2026-06-21)). The `TailCursor.ReadNew()` above already resets to offset 0 when `info.Size() < c.Offset` — call this out explicitly because it's an easy bug to reintroduce if a SQLite-backed provider is built without remembering this constraint.
+
+**SQLite-backed providers don't use `TailCursor` at all, though.** That type is for append-only JSONL. A SQLite-backed provider (Cursor, OpenCode) instead opens the `.db` file read-only on each poll tick and runs a `SELECT` against the relevant table — OpenCode in particular needs no incremental reading whatsoever, since it already maintains aggregated `tokens_*`/`cost` columns directly on its `session` table. Polling on a timer (not fsnotify) is correct for both, per the existing draft.md instinct already noted under [Cursor](Research.md#cursor--verified-via-web-search-2026-06-21).
+
+### 11. Liveness and usage are independent signals — don't conflate them
+
+This wasn't obvious until [Research](Research.md#contexttoken-usage-comparison--the-question-that-actually-matters-more-than-liveness) forced the distinction: "is this session active right now" and "how many tokens/how much context has it used" are two separate questions, answered by two separate mechanisms, with very different availability across tools.
+
+- **Liveness** (`SessionStatus`: Active/Idle/Ended) needs a live-process signal. Only Claude Code ships one (`~/.claude/sessions/<pid>.json`). Every other provider — Codex, Gemini CLI, OpenCode, Kimi Code, GitHub Copilot CLI, Cursor — falls back to mtime-based inference, confirmed by dedicated research rather than assumed.
+- **Usage** (`TokenUsage`) needs a structured-data signal, and that's available far more often: Claude Code, OpenCode, Codex, and Kimi Code all expose exact, pre-computed or trivially-summed token counts with zero heuristics. This doesn't depend on liveness at all — a provider can report exact usage for a session that ended an hour ago just as easily as for one running right now.
+
+Practical effect on `Provider` implementations: `Status()` and `ReadContext()` are allowed to disagree on confidence level. A provider can return `StatusIdle` (because mtime-based liveness is inherently fuzzy) alongside a fully exact `TokenUsage{Source: TokenSourceExact}` in the same `SessionContext` — that's not a bug, that's the honest shape of what's knowable for that tool. Don't downgrade `TokenSource` to `Estimated` just because `SessionStatus` is uncertain; they're unrelated axes.
 
 ### 7. Minimal config, not zero config
 
