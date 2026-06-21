@@ -32,9 +32,14 @@ type SessionInfo struct {
 	LastActive time.Time
 }
 
+type FileRef struct {
+	Path string
+}
+
 type SessionContext struct {
 	Session SessionInfo
 	Tokens  TokenUsage
+	Files   []FileRef
 }
 
 type Provider interface {

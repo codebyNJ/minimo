@@ -19,6 +19,13 @@ type jsonlLine struct {
 			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
+		Content []struct {
+			Type  string `json:"type"`
+			Name  string `json:"name"`
+			Input struct {
+				FilePath string `json:"file_path"`
+			} `json:"input"`
+		} `json:"content"`
 	} `json:"message"`
 }
 
