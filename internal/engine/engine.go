@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"github.com/codebyNJ/minimo/internal/config"
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
@@ -9,11 +10,28 @@ type Engine struct {
 	Store     *StateStore
 }
 
-func New() *Engine {
+func New(cfg config.Config) *Engine {
 	return &Engine{
-		providers: provider.All(),
+		providers: filterEnabled(provider.All(), cfg.EnabledProviders),
 		Store:     NewStateStore(),
 	}
+}
+
+func filterEnabled(all []provider.Provider, enabled []string) []provider.Provider {
+	if len(enabled) == 0 {
+		return all
+	}
+	allowed := make(map[string]bool, len(enabled))
+	for _, name := range enabled {
+		allowed[name] = true
+	}
+	var out []provider.Provider
+	for _, p := range all {
+		if allowed[p.Name()] {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (e *Engine) Refresh() error {

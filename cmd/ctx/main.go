@@ -11,30 +11,64 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/codebyNJ/minimo/internal/config"
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/export"
+	"github.com/codebyNJ/minimo/internal/provider"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
+	"github.com/codebyNJ/minimo/internal/provider/configprovider"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
 func main() {
+	cfg, err := config.Load(config.DefaultPath())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: failed to load config:", err)
+		os.Exit(1)
+	}
+	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
+		provider.Register(p)
+	}
+
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
 	case "status":
-		runStatus(os.Args[2:])
+		runStatus(os.Args[2:], cfg)
 	case "export":
-		runExport(os.Args[2:])
+		runExport(os.Args[2:], cfg)
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
 		os.Exit(1)
 	}
 }
 
-func runExport(args []string) {
+func runStatus(args []string, cfg config.Config) {
+	watch := false
+	for _, a := range args {
+		if a == "--watch" {
+			watch = true
+		}
+	}
+
+	e := engine.New(cfg)
+
+	if !watch {
+		if err := e.Refresh(); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		printTable(e)
+		return
+	}
+
+	runWatch(e, cfg)
+}
+
+func runExport(args []string, cfg config.Config) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: ctx export <session-id> [--with-content]")
 		os.Exit(1)
@@ -47,7 +81,7 @@ func runExport(args []string) {
 		}
 	}
 
-	e := engine.New()
+	e := engine.New(cfg)
 	if err := e.Refresh(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -68,29 +102,7 @@ func runExport(args []string) {
 	fmt.Println(string(data))
 }
 
-func runStatus(args []string) {
-	watch := false
-	for _, a := range args {
-		if a == "--watch" {
-			watch = true
-		}
-	}
-
-	e := engine.New()
-
-	if !watch {
-		if err := e.Refresh(); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
-		printTable(e)
-		return
-	}
-
-	runWatch(e)
-}
-
-func runWatch(e *engine.Engine) {
+func runWatch(e *engine.Engine, cfg config.Config) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -101,7 +113,7 @@ func runWatch(e *engine.Engine) {
 	}
 	projectsDir := filepath.Join(home, ".claude", "projects")
 
-	w, err := watcher.New(engine.DebounceDefault)
+	w, err := watcher.New(cfg.Debounce())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -113,7 +125,7 @@ func runWatch(e *engine.Engine) {
 	}
 	go w.Run(ctx)
 
-	ticker := time.NewTicker(engine.PollIntervalDefault)
+	ticker := time.NewTicker(cfg.PollInterval())
 	defer ticker.Stop()
 
 	refresh := func() {
