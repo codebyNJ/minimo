@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"sort"
 	"syscall"
+	"time"
 
 	"github.com/codebyNJ/minimo/internal/engine"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
+	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
@@ -67,6 +69,9 @@ func runWatch(e *engine.Engine) {
 	}
 	go w.Run(ctx)
 
+	ticker := time.NewTicker(engine.PollIntervalDefault)
+	defer ticker.Stop()
+
 	refresh := func() {
 		if err := e.Refresh(); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -81,6 +86,8 @@ func runWatch(e *engine.Engine) {
 		case <-ctx.Done():
 			return
 		case <-w.Events:
+			refresh()
+		case <-ticker.C:
 			refresh()
 		}
 	}
