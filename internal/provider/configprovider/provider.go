@@ -84,14 +84,13 @@ func (p *Provider) sessionInfo(path string) (provider.SessionInfo, []byte, error
 	}, data, nil
 }
 
+// ListSessions returns only the session IDs (matched file paths). The engine
+// reads each session's full detail via ReadContext, so reading file content
+// here too would just read every matched file twice per refresh.
 func (p *Provider) ListSessions() ([]provider.SessionInfo, error) {
 	var out []provider.SessionInfo
 	for _, path := range p.matchedFiles() {
-		info, _, err := p.sessionInfo(path)
-		if err != nil {
-			continue
-		}
-		out = append(out, info)
+		out = append(out, provider.SessionInfo{ID: path, Provider: p.Name()})
 	}
 	return out, nil
 }

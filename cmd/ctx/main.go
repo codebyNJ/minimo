@@ -157,6 +157,9 @@ func printTable(e *engine.Engine) {
 
 	fmt.Printf("%-12s %-8s %-8s %-10s %-24s %s\n", "PROVIDER", "STATUS", "TOKENS", "LAST", "CWD", "LABEL")
 	for _, r := range rows {
+		if r.Session.LastActive.IsZero() {
+			continue
+		}
 		fmt.Printf("%-12s %-8s %-8d %-10s %-24s %s\n",
 			r.Session.Provider,
 			r.Session.Status,
