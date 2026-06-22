@@ -23,7 +23,11 @@ func New(store *engine.StateStore) Model {
 		table.WithFocused(true),
 	)
 	t.SetStyles(tableStyles())
-	return Model{store: store, table: t}
+
+	m := Model{store: store, table: t}
+	m.rows = visibleRows(m.store, m.showHistory)
+	m.table.SetRows(rowsToTableRows(m.rows))
+	return m
 }
 
 func (m Model) Init() tea.Cmd {

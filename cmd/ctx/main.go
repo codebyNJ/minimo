@@ -58,7 +58,7 @@ func runTUI(cfg config.Config) {
 	}
 
 	m := ui.New(e.Store)
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	watchCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
