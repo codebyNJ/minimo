@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Scope:** The 5-commit increment adding context-fullness + exact-cost metrics to `ctx` (the `MODEL`/`CONTEXT`/`COST` columns, the `TOKENS`→`LIFETIME` rename, and the supporting data-model/provider changes).
-**Git range:** `861c282` (start) → `d00759e` (end of feature), plus follow-up fix `2257ca3`.
+**Git range:** `861c282` (start) → `d00759e` (end of feature), plus follow-up fixes `2257ca3` (formatCount rounding) and `fcf900b` (zero-turn Known gating).
 **Plan/spec:** [docs/superpowers/plans/2026-06-22-context-cost-metrics.md](../plans/2026-06-22-context-cost-metrics.md), [docs/superpowers/specs/2026-06-22-context-cost-metrics-design.md](../specs/2026-06-22-context-cost-metrics-design.md)
 
 This is the single consolidated record requested: it folds together (1) the per-task reviews and final whole-branch review done during implementation, and (2) a separate forward-looking risk review focused on what could break later — with different data, future model strings, schema drift, or as the code evolves.
@@ -42,10 +42,13 @@ A row reading `2.0M/1.0M` renders as two plain numbers with no `%`, color, or wa
 Values in `[999,500, 999,999]` fell into the `>= 1_000` branch and rounded via `%.0f` to `"1000K"` instead of `"1.0M"` — precisely the near-full-context regime users most need to read correctly.
 - **Decision: FIXED** in `2257ca3`. The K-branch now promotes to `M` when `n/1000 >= 999.5`. Verified across boundary values: `999499→999K`, `999500→1.0M`, `999999→1.0M`, `471000→471K` (unchanged), `1950000→1.9M`.
 
-### Minor (deferred, with reasoning)
+### Minor
 
-**M-1. Zero-turn Claude session reports `Known: true` with `Tokens: 0`** — `internal/provider/claudecode/provider.go` `ReadContext`
-A session observed before its first assistant turn shows `0/1.0M` rather than `-`, asserting more confidence than the data supports. Plan-mandated; the window is a few seconds before the first reply; `0` is not damagingly wrong (the context genuinely is empty). **Defer.** If tightened later, gate `Known: state.model != ""`.
+**M-1. Zero-turn Claude session reported `Known: true` with `Tokens: 0`** — `internal/provider/claudecode/provider.go` `ReadContext`
+A session observed before its first assistant turn showed `0/1.0M` rather than `-`, asserting more confidence than the data supported.
+- **Decision: FIXED** in `fcf900b`. `Known` is now `state.model != ""`, which only becomes true once the first assistant turn (the only place `state.model` is set) has been processed. Verified against a synthetic zero-turn fixture (a hand-built `.jsonl` with only a `user`-type line, no `assistant` line): CONTEXT correctly shows `-` instead of `0/1.0M`; the real long-running session in this project was unaffected (`535K/1.0M`, unchanged).
+
+### Minor (deferred, with reasoning)
 
 **M-2. OpenCode `model` scanned as plain `string`, not `sql.NullString`** — `internal/provider/opencode/queries.go`
 A NULL `model` column would make `Scan` return a hard error for that row (fails loud, not silent corruption). Matches the pre-existing treatment of `title`/`directory`/`cost`. **Defer** — when hardened, do all four columns in one pass so the row struct stays uniform; don't special-case `model`.
@@ -74,10 +77,11 @@ Not a bug today, but the one risk with no possible automated detection (by the p
 
 ## 4. Overall risk posture
 
-Low-risk, additive, read-mostly feature. No Critical or crash-class defects. The single real bug found (I-2) is fixed. The remaining Important item (I-1) and the staleness risk (I-3) both live in the display/data-currency layer around the new CONTEXT column and are deliberately routed to Phase 3 (TUI) and a re-verification habit respectively, rather than papered over. Everything else is dormant or already graceful.
+Low-risk, additive, read-mostly feature. No Critical or crash-class defects. The real bug found (I-2) and the over-confident zero-turn flag (M-1) are both fixed and verified. The remaining Important item (I-1) and the staleness risk (I-3) both live in the display/data-currency layer around the new CONTEXT column and are deliberately routed to Phase 3 (TUI) and a re-verification habit respectively, rather than papered over — confirmed with the user 2026-06-22, not silently deferred. Everything else is dormant or already graceful.
 
 ## 5. Follow-up obligations (forward-looking)
 
 1. **Phase 3 (TUI):** add the over-limit visual signal (I-1) when it builds bars/color over these same fields.
 2. **`contextwindow.go` re-verification:** re-check the two models' window sizes on Claude Code CLI version bumps (I-3) — silent-staleness risk, undetectable by design.
 3. **Optional hardening passes** (M-2 NullString across all 4 columns; M-3 empty-id fallback; M-4 rune-aware truncation) — pick up only if a concrete trigger appears.
+4. **Go version floor:** resolved 2026-06-22 — accepted 1.25, recorded in [Decisions.md](../../wiki/Decisions.md). No longer an open item.

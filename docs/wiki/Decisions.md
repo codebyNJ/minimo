@@ -11,6 +11,7 @@ Every entry here is a point where we deliberately chose not to assume and asked 
 | 2026-06-21 | Go module path | `github.com/codebyNJ/minimo` | User's GitHub identity. |
 | 2026-06-21 | What does `Context.Decisions` mean, given "zero AI" can't summarize intent from logs? | Dropped from v1 entirely | Re-add later only with a named, non-AI source (e.g. git commits in the session window) — not as a vague freeform list. |
 | 2026-06-21 | License | MIT | Standard for Go CLI tools, no reason to deviate. |
+| 2026-06-22 | Go version floor: every Phase 1-5 plan stated "1.23+", but `go.mod` says `go 1.25` — which governs? | Accept 1.25 as the real floor; update stated claims to match, don't downgrade the dependency | `modernc.org/sqlite@v1.53.0` and its `libc` dependency both declare `go 1.25.0` — confirmed by inspecting their `go.mod` in the module cache, not assumed. Downgrading the driver to artificially restore 1.23 would trade a working, already-verified dependency for an arbitrary version constraint with no real benefit, since distribution is prebuilt binaries (goreleaser, per Phase 6) where the floor is invisible to end users anyway. |
 
 ## Open questions not yet resolved
 
