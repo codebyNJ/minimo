@@ -21,3 +21,4 @@ Thumbs.db
 
 # Brainstorming visual companion (local-only mockup sessions)
 .superpowers/
+docs/superpowers/*
