@@ -187,6 +187,10 @@ func formatCount(n int) string {
 	case n >= 1_000_000:
 		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	case n >= 1_000:
+		// 999,500–999,999 would round up to "1000K"; promote to "1.0M".
+		if float64(n)/1_000 >= 999.5 {
+			return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+		}
 		return fmt.Sprintf("%.0fK", float64(n)/1_000)
 	default:
 		return fmt.Sprintf("%d", n)
