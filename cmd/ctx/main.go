@@ -155,15 +155,19 @@ func printTable(e *engine.Engine) {
 		return rows[i].Session.LastActive.After(rows[j].Session.LastActive)
 	})
 
-	fmt.Printf("%-12s %-8s %-8s %-10s %-24s %s\n", "PROVIDER", "STATUS", "TOKENS", "LAST", "CWD", "LABEL")
+	fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-10s %-24s %s\n",
+		"PROVIDER", "STATUS", "MODEL", "LIFETIME", "CONTEXT", "COST", "LAST", "CWD", "LABEL")
 	for _, r := range rows {
 		if r.Session.LastActive.IsZero() {
 			continue
 		}
-		fmt.Printf("%-12s %-8s %-8d %-10s %-24s %s\n",
+		fmt.Printf("%-12s %-8s %-18s %-10d %-12s %-9s %-10s %-24s %s\n",
 			r.Session.Provider,
 			r.Session.Status,
+			emptyDash(truncateRight(r.Session.Model, 18)),
 			r.Tokens.Total,
+			formatContext(r.Context),
+			formatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),
 			truncate(r.Session.CWD, 24),
 			r.Session.Label,
@@ -171,9 +175,51 @@ func printTable(e *engine.Engine) {
 	}
 }
 
+func emptyDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+func formatCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.0fK", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
+}
+
+func formatContext(c provider.ContextUsage) string {
+	if !c.Known {
+		return "-"
+	}
+	if c.Limit > 0 {
+		return fmt.Sprintf("%s/%s", formatCount(c.Tokens), formatCount(c.Limit))
+	}
+	return formatCount(c.Tokens)
+}
+
+func formatCost(c provider.Cost) string {
+	if !c.Known {
+		return "-"
+	}
+	return fmt.Sprintf("$%.4f", c.USD)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return "..." + s[len(s)-n+3:]
+}
+
+func truncateRight(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-3] + "..."
 }
