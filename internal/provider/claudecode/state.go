@@ -8,14 +8,16 @@ import (
 )
 
 type sessionState struct {
-	id         string
-	cwd        string
-	label      string
-	startedAt  time.Time
-	lastActive time.Time
-	tokens     int
-	files      map[string]struct{}
-	cursor     tailCursor
+	id            string
+	cwd           string
+	label         string
+	model         string
+	startedAt     time.Time
+	lastActive    time.Time
+	tokens        int
+	contextTokens int
+	files         map[string]struct{}
+	cursor        tailCursor
 }
 
 var fileTools = map[string]bool{"Read": true, "Edit": true, "Write": true}
@@ -37,6 +39,10 @@ func (s *sessionState) applyNew(data []byte) {
 		if l.Type == "assistant" {
 			u := l.Message.Usage
 			s.tokens += u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+			s.contextTokens = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+			if l.Message.Model != "" {
+				s.model = l.Message.Model
+			}
 			for _, block := range l.Message.Content {
 				if block.Type == "tool_use" && fileTools[block.Name] && block.Input.FilePath != "" {
 					if s.files == nil {
@@ -69,6 +75,7 @@ func (s *sessionState) info(providerName string, status provider.SessionStatus) 
 		Provider:   providerName,
 		CWD:        s.cwd,
 		Label:      s.label,
+		Model:      s.model,
 		Status:     status,
 		StartedAt:  s.startedAt,
 		LastActive: s.lastActive,

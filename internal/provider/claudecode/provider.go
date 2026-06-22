@@ -142,5 +142,10 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 		Session: state.info(p.Name(), p.statusFor(sessionID, state, live)),
 		Tokens:  provider.TokenUsage{Total: state.tokens, Source: provider.TokenSourceExact},
 		Files:   state.fileRefs(),
+		Context: provider.ContextUsage{
+			Tokens: state.contextTokens,
+			Known:  true,
+			Limit:  contextLimitFor(state.model),
+		},
 	}, nil
 }

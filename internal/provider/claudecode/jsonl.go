@@ -13,6 +13,7 @@ type jsonlLine struct {
 	Timestamp string `json:"timestamp"`
 	CWD       string `json:"cwd"`
 	Message   struct {
+		Model string `json:"model"`
 		Usage struct {
 			InputTokens              int `json:"input_tokens"`
 			OutputTokens             int `json:"output_tokens"`
