@@ -144,7 +144,7 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 		Files:   state.fileRefs(),
 		Context: provider.ContextUsage{
 			Tokens: state.contextTokens,
-			Known:  true,
+			Known:  state.model != "",
 			Limit:  contextLimitFor(state.model),
 		},
 	}, nil
