@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
@@ -64,13 +65,33 @@ func (p *OpenCodeProvider) statusFor(r sessionRow) provider.SessionStatus {
 	return provider.StatusEnded
 }
 
+type modelRef struct {
+	ID string `json:"id"`
+}
+
+// OpenCode's session.model column stores a JSON object ({"id":...,
+// "providerID":...,"variant":...}), not a bare model name — confirmed
+// against this machine's real opencode.db on 2026-06-22. Only the id is
+// useful for display; fall back to the raw value if it's ever not JSON
+// (e.g. an older OpenCode schema), rather than silently showing nothing.
+func parseModelName(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var m modelRef
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return raw
+	}
+	return m.ID
+}
+
 func (p *OpenCodeProvider) toSessionInfo(r sessionRow) provider.SessionInfo {
 	return provider.SessionInfo{
 		ID:         r.id,
 		Provider:   p.Name(),
 		CWD:        r.directory,
 		Label:      r.title,
-		Model:      r.model,
+		Model:      parseModelName(r.model),
 		Status:     p.statusFor(r),
 		StartedAt:  epochMillis(r.timeCreated),
 		LastActive: epochMillis(r.timeUpdated),
