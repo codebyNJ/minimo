@@ -9,6 +9,7 @@ type sessionRow struct {
 	id               string
 	directory        string
 	title            string
+	model            string
 	cost             float64
 	tokensInput      int64
 	tokensOutput     int64
@@ -20,11 +21,11 @@ type sessionRow struct {
 	timeArchived     sql.NullInt64
 }
 
-const sessionColumns = `id, directory, title, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, time_created, time_updated, time_archived`
+const sessionColumns = `id, directory, title, model, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, time_created, time_updated, time_archived`
 
 func scanSessionRow(scan func(...any) error) (sessionRow, error) {
 	var r sessionRow
-	err := scan(&r.id, &r.directory, &r.title, &r.cost, &r.tokensInput, &r.tokensOutput,
+	err := scan(&r.id, &r.directory, &r.title, &r.model, &r.cost, &r.tokensInput, &r.tokensOutput,
 		&r.tokensReasoning, &r.tokensCacheRead, &r.tokensCacheWrite,
 		&r.timeCreated, &r.timeUpdated, &r.timeArchived)
 	return r, err

@@ -70,6 +70,7 @@ func (p *OpenCodeProvider) toSessionInfo(r sessionRow) provider.SessionInfo {
 		Provider:   p.Name(),
 		CWD:        r.directory,
 		Label:      r.title,
+		Model:      r.model,
 		Status:     p.statusFor(r),
 		StartedAt:  epochMillis(r.timeCreated),
 		LastActive: epochMillis(r.timeUpdated),
@@ -105,5 +106,8 @@ func (p *OpenCodeProvider) ReadContext(sessionID string) (*provider.SessionConte
 	return &provider.SessionContext{
 		Session: p.toSessionInfo(*r),
 		Tokens:  provider.TokenUsage{Total: total, Source: provider.TokenSourceExact},
+		Cost:    provider.Cost{USD: r.cost, Known: true},
+		// Context is left at its zero value (Known: false) — the session
+		// table only has lifetime aggregates, not a latest-turn figure.
 	}, nil
 }
