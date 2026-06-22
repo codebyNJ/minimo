@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/codebyNJ/minimo/internal/config"
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/export"
@@ -19,6 +21,7 @@ import (
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
 	"github.com/codebyNJ/minimo/internal/provider/configprovider"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
+	"github.com/codebyNJ/minimo/internal/ui"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
@@ -33,8 +36,8 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
-		os.Exit(1)
+		runTUI(cfg)
+		return
 	}
 	switch os.Args[1] {
 	case "status":
@@ -42,7 +45,40 @@ func main() {
 	case "export":
 		runExport(os.Args[2:], cfg)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ctx status [--watch] | ctx export <session-id> [--with-content]")
+		fmt.Fprintln(os.Stderr, "usage: ctx [opens TUI] | ctx status [--watch] | ctx export <session-id> [--with-content]")
+		os.Exit(1)
+	}
+}
+
+func runTUI(cfg config.Config) {
+	e := engine.New(cfg)
+	if err := e.Refresh(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+
+	m := ui.New(e.Store)
+	p := tea.NewProgram(m)
+
+	watchCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		if err := watchLoop(watchCtx, cfg, func() {
+			if err := e.Refresh(); err != nil {
+				return
+			}
+			p.Send(ui.RefreshMsg{})
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+		}
+		p.Quit()
+	}()
+
+	_, err := p.Run()
+	stop()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
