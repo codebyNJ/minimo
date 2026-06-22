@@ -107,28 +107,6 @@ func runWatch(e *engine.Engine, cfg config.Config) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	projectsDir := filepath.Join(home, ".claude", "projects")
-
-	w, err := watcher.New(cfg.Debounce())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	defer w.Close()
-	if err := w.AddRecursive(projectsDir); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	go w.Run(ctx)
-
-	ticker := time.NewTicker(cfg.PollInterval())
-	defer ticker.Stop()
-
 	refresh := func() {
 		if err := e.Refresh(); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -137,15 +115,41 @@ func runWatch(e *engine.Engine, cfg config.Config) {
 		printTable(e)
 	}
 
-	refresh()
+	if err := watchLoop(ctx, cfg, refresh); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+}
+
+func watchLoop(ctx context.Context, cfg config.Config, onTrigger func()) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	projectsDir := filepath.Join(home, ".claude", "projects")
+
+	w, err := watcher.New(cfg.Debounce())
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+	if err := w.AddRecursive(projectsDir); err != nil {
+		return err
+	}
+	go w.Run(ctx)
+
+	ticker := time.NewTicker(cfg.PollInterval())
+	defer ticker.Stop()
+
+	onTrigger()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-w.Events:
-			refresh()
+			onTrigger()
 		case <-ticker.C:
-			refresh()
+			onTrigger()
 		}
 	}
 }
