@@ -53,3 +53,24 @@ func (e *Engine) Refresh() error {
 	}
 	return nil
 }
+
+type ProviderStatus struct {
+	Name        string
+	Detected    bool
+	CheckedPath string
+}
+
+// ProviderStatuses reports detection status for every registered
+// provider (the full global registry, not filtered by enabled_providers)
+// so the TUI can show which harnesses ctx found on this machine.
+func ProviderStatuses() []ProviderStatus {
+	var out []ProviderStatus
+	for _, p := range provider.All() {
+		status := ProviderStatus{Name: p.Name(), Detected: p.Detect()}
+		if pr, ok := p.(provider.PathReporter); ok {
+			status.CheckedPath = pr.CheckedPath()
+		}
+		out = append(out, status)
+	}
+	return out
+}
