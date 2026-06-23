@@ -73,3 +73,19 @@ type Provider interface {
 	ListSessions() ([]SessionInfo, error)
 	ReadContext(sessionID string) (*SessionContext, error)
 }
+
+// Watchable is implemented by providers backed by files that change on
+// disk (JSONL transcripts), so the fsnotify watcher knows what to watch.
+// Providers backed by a database (OpenCode) rely on the poll ticker
+// instead and don't implement this.
+type Watchable interface {
+	WatchPaths() []string
+}
+
+// PathReporter is implemented by providers with a single resolvable root
+// directory, so the detection-status UI can show which path was actually
+// checked. configprovider's generic Provider matches multiple glob
+// patterns rather than one root, so it doesn't implement this.
+type PathReporter interface {
+	CheckedPath() string
+}
