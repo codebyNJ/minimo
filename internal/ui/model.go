@@ -15,16 +15,17 @@ type Model struct {
 	table       table.Model
 	rows        []provider.SessionContext
 	showHistory bool
+	statuses    []engine.ProviderStatus
 }
 
-func New(store *engine.StateStore) Model {
+func New(store *engine.StateStore, statuses []engine.ProviderStatus) Model {
 	t := table.New(
 		table.WithColumns(tableColumns()),
 		table.WithFocused(true),
 	)
 	t.SetStyles(tableStyles())
 
-	m := Model{store: store, table: t}
+	m := Model{store: store, table: t, statuses: statuses}
 	m.rows = visibleRows(m.store, m.showHistory)
 	m.table.SetRows(rowsToTableRows(m.rows))
 	return m
