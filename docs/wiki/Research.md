@@ -179,6 +179,47 @@ Liveness (Active/Idle/Ended) and usage (tokens/cost/context) are **independent**
 
 **This is the more important takeaway than the liveness table above.** 4 of the tools researched (Claude Code, OpenCode, Codex, Kimi Code) — including both tools the user actually runs day to day — expose **exact, pre-computed or trivially-summed** token usage with no heuristics. The `Provider` interface's `TokenUsage{Total, Source}` (see [Architecture #5](Architecture.md#5-exact-token-counts-where-available-heuristic-only-where-not)) already accommodates all of them without changes — `TokenSourceExact` just gets populated by a SQL query instead of a JSONL sum for OpenCode, that's an implementation detail inside each provider, not an interface change. A "btop for AI agents" is not blocked by the liveness gap — it loses precision on *when exactly* a session went idle for 7 of 8 tools, but it does **not** lose the core context-usage numbers that are the main reason to glance at the dashboard in the first place.
 
+## Re-verification before building Codex + Kimi Code providers (2026-06-23)
+
+Neither tool is installed on this machine, so this is a fresh web-search re-check of the 2026-06-21 findings above (not a ground-truth file inspection like OpenCode got) — done because schemas for actively-developed CLIs can drift in two days. Two real updates found:
+
+- **Codex CLI — file path refined, one new fact.** Active sessions: `~/.codex/sessions/YYYY/MM/DD/rollout-<session-id>.jsonl` (the session-id is embedded in the filename itself, not a separate timestamp+uuid pair as the original note implied). **New:** archived sessions move to a parallel `~/.codex/archived_sessions/YYYY/MM/DD/rollout-<session-id>.jsonl` tree — a provider that only scans `sessions/` will silently miss archived ones. Token schema unchanged and reconfirmed directly against `codex-rs` source discussion: `token_count` events carry `total_token_usage.{input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens,total_tokens}` (cumulative) and `last_token_usage` (same shape, per-turn delta). The rate-limit-only re-emission gotcha is a tracked upstream issue ([openai/codex#14489](https://github.com/openai/codex/issues/14489)), confirming the original "key off the latest event, don't sum" guidance still holds. Sources: [Codex CLI Session Archiving](https://codex.danielvaughan.com/2026/06/02/codex-cli-session-archiving-lifecycle-management-v0136/), [openai/codex#14489](https://github.com/openai/codex/issues/14489), [openai/codex codex.rs](https://github.com/openai/codex/blob/e2c994e32a31415e87070bef28ed698968d2e549/codex-rs/core/src/codex.rs).
+
+- **Kimi Code CLI — genuinely new fields confirmed.** Fetched the official wire-protocol docs directly: `StatusUpdate` is documented as
+  ```typescript
+  interface StatusUpdate {
+    context_usage?: number | null        // ratio 0-1
+    context_tokens?: number | null        // tokens currently in context
+    max_context_tokens?: number | null    // context window size
+    token_usage?: TokenUsage | null
+    message_id?: string | null
+    plan_mode?: boolean | null
+  }
+  interface TokenUsage {
+    input_other: number
+    output: number
+    input_cache_read: number
+    input_cache_creation: number
+  }
+  ```
+  `context_usage`/`context_tokens`/`max_context_tokens` were **not** in the 2026-06-21 research — this is new. It means Kimi Code reports exact context-fullness (current tokens *and* the window ceiling) directly in the wire protocol, unlike Claude Code, which requires `ctx`'s own hardcoded per-model window-size table ([contextwindow.go](../../internal/provider/claudecode/contextwindow.go)). All `StatusUpdate` fields are optional/nullable — a reader must tolerate any subset being absent on a given line, not assume every field is always present. Source: [Wire mode — Kimi Code CLI Docs](https://moonshotai.github.io/kimi-cli/en/customization/wire-mode.html).
+
+Both are still **not ground-truth-verified against a real install** — if Codex or Kimi Code usage on this machine starts in the future, re-check against real files before trusting this section blindly, same standard as everything else here.
+
+## Codex rollout JSONL — exact schema from source (2026-06-23)
+
+The two sources above (a blog post, a GitHub issue) only paraphrased the format. Pulled the actual struct definitions from `codex-rs/protocol/src/protocol.rs` (fetched via `gh api repos/openai/codex/contents/...`, the current `main` branch) for exact field names — this supersedes the paraphrased version above wherever they differ.
+
+Every rollout line is a `RolloutLine { timestamp: String, #[serde(flatten)] item: RolloutItem }`, and `RolloutItem` is `#[serde(tag = "type", content = "payload", rename_all = "snake_case")]` with variants `session_meta`, `response_item`, `inter_agent_communication`, `compacted`, `turn_context`, `event_msg`. So every line on disk is shaped `{"timestamp": "...", "type": "<variant>", "payload": {...}}`.
+
+- **`session_meta`** payload (`SessionMetaLine`, flattening `SessionMeta`): `session_id`, `id` (ThreadId), `timestamp` (session start, string), **`cwd` (PathBuf — confirmed present, contradicting the earlier assumption that Codex's metadata header has no cwd field)**, `originator`, `cli_version`, plus optional `git: GitInfo{commit_hash, branch, repository_url}`. No `model` field here.
+- **`turn_context`** payload (`TurnContextItem`): `cwd` (AbsolutePathBuf, present on every turn, can differ from session_meta's if the agent changes directory), `model: String` (this is where the active model name actually comes from, not session_meta), plus approval/sandbox policy fields not relevant to `ctx`.
+- **`event_msg`** payload is itself tagged (`EventMsg`, `#[serde(tag = "type", rename_all = "snake_case")]`) — for the token-count case: `{"type": "token_count", "info": TokenUsageInfo | null, "rate_limits": ... | null}`.
+- **`TokenUsageInfo`**: `total_token_usage: TokenUsage`, `last_token_usage: TokenUsage`, and **`model_context_window: Option<i64>`** — Codex *does* report the context-window ceiling directly, contradicting the 2026-06-21 research's assumption that no window-size field exists. `info` itself is `Option` (can be `null`), and `model_context_window` is independently optional within it — both must be nil-checked, but when present, no hardcoded per-model table is needed at all, mirroring Kimi Code's `max_context_tokens` rather than Claude Code's hardcoded table.
+- **`TokenUsage`** (the per-event fields, confirmed exact field names): `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`, `total_tokens` — all `i64`. Matches the 2026-06-21 finding's field names exactly; this round just confirmed the nesting (`payload.info.total_token_usage`, not `payload.total_token_usage` directly as the earlier paraphrase implied).
+
+Source: [codex-rs/protocol/src/protocol.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs), fetched directly via `gh api repos/openai/codex/contents/codex-rs/protocol/src/protocol.rs` on 2026-06-23. This is the actual current source, not a secondary description — treat it as authoritative over the paraphrased findings above wherever they conflict.
+
 ## Libraries
 
 | Library in draft.md | Status found | Recommendation |

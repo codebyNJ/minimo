@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	DebounceMS       int      `yaml:"debounce_ms"`
-	PollIntervalSec  int      `yaml:"poll_interval_seconds"`
-	EnabledProviders []string `yaml:"enabled_providers"`
+	DebounceMS       int               `yaml:"debounce_ms"`
+	PollIntervalSec  int               `yaml:"poll_interval_seconds"`
+	EnabledProviders []string          `yaml:"enabled_providers"`
+	ProviderPaths    map[string]string `yaml:"provider_paths"`
 }
 
 func Default() Config {

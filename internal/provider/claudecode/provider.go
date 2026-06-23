@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
+	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
 const idleThreshold = 30 * time.Second
@@ -19,27 +20,36 @@ func init() {
 }
 
 type ClaudeCodeProvider struct {
-	home string
-
 	mu       sync.Mutex
 	sessions map[string]*sessionState
 }
 
 func New() *ClaudeCodeProvider {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return &ClaudeCodeProvider{
-		home:     filepath.Join(home, ".claude"),
-		sessions: make(map[string]*sessionState),
-	}
+	return &ClaudeCodeProvider{sessions: make(map[string]*sessionState)}
 }
 
 func (p *ClaudeCodeProvider) Name() string { return "claude-code" }
 
-func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home, "projects") }
-func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home, "sessions") }
+func (p *ClaudeCodeProvider) home() string {
+	if override, ok := provider.PathOverride(p.Name()); ok {
+		return override
+	}
+	if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {
+		return env
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = ""
+	}
+	return filepath.Join(homeDir, ".claude")
+}
+
+func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home(), "projects") }
+func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home(), "sessions") }
+
+func (p *ClaudeCodeProvider) CheckedPath() string { return p.projectsDir() }
+
+func (p *ClaudeCodeProvider) WatchPaths() []string { return []string{p.projectsDir()} }
 
 func (p *ClaudeCodeProvider) Detect() bool {
 	info, err := os.Stat(p.projectsDir())
@@ -112,7 +122,7 @@ func (p *ClaudeCodeProvider) ListSessions() ([]provider.SessionInfo, error) {
 			id := strings.TrimSuffix(f.Name(), ".jsonl")
 			state, ok := p.sessions[id]
 			if !ok {
-				state = &sessionState{id: id, cursor: tailCursor{path: filepath.Join(dir, f.Name())}}
+				state = &sessionState{id: id, cursor: tailreader.Cursor{Path: filepath.Join(dir, f.Name())}}
 				p.sessions[id] = state
 			}
 			out = append(out, state.info(p.Name(), p.statusFor(id, state, live)))
@@ -129,7 +139,7 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 		return nil, fmt.Errorf("claudecode: unknown session %q (call ListSessions first)", sessionID)
 	}
 
-	data, err := state.cursor.readNew()
+	data, err := state.cursor.ReadNew()
 	if err != nil {
 		return nil, err
 	}

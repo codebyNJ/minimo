@@ -19,24 +19,30 @@ func init() {
 }
 
 type OpenCodeProvider struct {
-	dbPath string
-	db     *sql.DB
+	db *sql.DB
 }
 
 func New() *OpenCodeProvider {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return &OpenCodeProvider{
-		dbPath: filepath.Join(home, ".local", "share", "opencode", "opencode.db"),
-	}
+	return &OpenCodeProvider{}
 }
 
 func (p *OpenCodeProvider) Name() string { return "opencode" }
 
+func (p *OpenCodeProvider) dbPath() string {
+	if override, ok := provider.PathOverride(p.Name()); ok {
+		return override
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+	return filepath.Join(home, ".local", "share", "opencode", "opencode.db")
+}
+
+func (p *OpenCodeProvider) CheckedPath() string { return p.dbPath() }
+
 func (p *OpenCodeProvider) Detect() bool {
-	info, err := os.Stat(p.dbPath)
+	info, err := os.Stat(p.dbPath())
 	return err == nil && !info.IsDir()
 }
 
@@ -46,7 +52,7 @@ func (p *OpenCodeProvider) open() (*sql.DB, error) {
 	if p.db != nil {
 		return p.db, nil
 	}
-	dsn := "file:" + filepath.ToSlash(p.dbPath) + "?mode=ro"
+	dsn := "file:" + filepath.ToSlash(p.dbPath()) + "?mode=ro"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
