@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
+	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
 type sessionState struct {
@@ -17,7 +18,7 @@ type sessionState struct {
 	tokens        int
 	contextTokens int
 	files         map[string]struct{}
-	cursor        tailCursor
+	cursor        tailreader.Cursor
 }
 
 var fileTools = map[string]bool{"Read": true, "Edit": true, "Write": true}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
+	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
 const idleThreshold = 30 * time.Second
@@ -112,7 +113,7 @@ func (p *ClaudeCodeProvider) ListSessions() ([]provider.SessionInfo, error) {
 			id := strings.TrimSuffix(f.Name(), ".jsonl")
 			state, ok := p.sessions[id]
 			if !ok {
-				state = &sessionState{id: id, cursor: tailCursor{path: filepath.Join(dir, f.Name())}}
+				state = &sessionState{id: id, cursor: tailreader.Cursor{Path: filepath.Join(dir, f.Name())}}
 				p.sessions[id] = state
 			}
 			out = append(out, state.info(p.Name(), p.statusFor(id, state, live)))
@@ -129,7 +130,7 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 		return nil, fmt.Errorf("claudecode: unknown session %q (call ListSessions first)", sessionID)
 	}
 
-	data, err := state.cursor.readNew()
+	data, err := state.cursor.ReadNew()
 	if err != nil {
 		return nil, err
 	}
