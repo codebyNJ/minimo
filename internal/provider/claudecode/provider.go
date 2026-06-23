@@ -20,27 +20,36 @@ func init() {
 }
 
 type ClaudeCodeProvider struct {
-	home string
-
 	mu       sync.Mutex
 	sessions map[string]*sessionState
 }
 
 func New() *ClaudeCodeProvider {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = ""
-	}
-	return &ClaudeCodeProvider{
-		home:     filepath.Join(home, ".claude"),
-		sessions: make(map[string]*sessionState),
-	}
+	return &ClaudeCodeProvider{sessions: make(map[string]*sessionState)}
 }
 
 func (p *ClaudeCodeProvider) Name() string { return "claude-code" }
 
-func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home, "projects") }
-func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home, "sessions") }
+func (p *ClaudeCodeProvider) home() string {
+	if override, ok := provider.PathOverride(p.Name()); ok {
+		return override
+	}
+	if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {
+		return env
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = ""
+	}
+	return filepath.Join(homeDir, ".claude")
+}
+
+func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home(), "projects") }
+func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home(), "sessions") }
+
+func (p *ClaudeCodeProvider) CheckedPath() string { return p.projectsDir() }
+
+func (p *ClaudeCodeProvider) WatchPaths() []string { return []string{p.projectsDir()} }
 
 func (p *ClaudeCodeProvider) Detect() bool {
 	info, err := os.Stat(p.projectsDir())
