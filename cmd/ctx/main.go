@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"syscall"
 	"time"
@@ -19,7 +18,9 @@ import (
 	"github.com/codebyNJ/minimo/internal/format"
 	"github.com/codebyNJ/minimo/internal/provider"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
+	_ "github.com/codebyNJ/minimo/internal/provider/codex"
 	"github.com/codebyNJ/minimo/internal/provider/configprovider"
+	_ "github.com/codebyNJ/minimo/internal/provider/kimicode"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/ui"
 	"github.com/codebyNJ/minimo/internal/watcher"
@@ -30,6 +31,9 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: failed to load config:", err)
 		os.Exit(1)
+	}
+	for name, path := range cfg.ProviderPaths {
+		provider.SetPathOverride(name, path)
 	}
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
@@ -158,19 +162,25 @@ func runWatch(e *engine.Engine, cfg config.Config) {
 }
 
 func watchLoop(ctx context.Context, cfg config.Config, onTrigger func()) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	projectsDir := filepath.Join(home, ".claude", "projects")
-
 	w, err := watcher.New(cfg.Debounce())
 	if err != nil {
 		return err
 	}
 	defer w.Close()
-	if err := w.AddRecursive(projectsDir); err != nil {
-		return err
+
+	for _, p := range provider.All() {
+		if !p.Detect() {
+			continue
+		}
+		wp, ok := p.(provider.Watchable)
+		if !ok {
+			continue
+		}
+		for _, path := range wp.WatchPaths() {
+			if err := w.AddRecursive(path); err != nil {
+				continue
+			}
+		}
 	}
 	go w.Run(ctx)
 
