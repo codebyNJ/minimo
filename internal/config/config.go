@@ -14,6 +14,7 @@ type Config struct {
 	EnabledProviders []string          `yaml:"enabled_providers"`
 	ProviderPaths    map[string]string `yaml:"provider_paths"`
 	Theme            string            `yaml:"theme"`
+	LogLevel         string            `yaml:"log_level"`
 }
 
 func Default() Config {

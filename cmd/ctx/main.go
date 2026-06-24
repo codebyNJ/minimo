@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/export"
 	"github.com/codebyNJ/minimo/internal/format"
+	"github.com/codebyNJ/minimo/internal/logging"
 	"github.com/codebyNJ/minimo/internal/pricing"
 	"github.com/codebyNJ/minimo/internal/provider"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
@@ -91,6 +93,16 @@ func main() {
 		themeName = f.theme
 	}
 	ui.SetTheme(ui.ThemeByName(themeName, f.noColor))
+
+	logLevel := logging.ParseLevel(cfg.LogLevel)
+	if f.debug {
+		logLevel = logging.LevelDebug
+	}
+	logPath := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		logPath = filepath.Join(home, ".ctx", "ctx.log")
+	}
+	logging.Init(logLevel, logPath)
 
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
