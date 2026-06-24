@@ -16,6 +16,7 @@ import (
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/export"
 	"github.com/codebyNJ/minimo/internal/format"
+	"github.com/codebyNJ/minimo/internal/pricing"
 	"github.com/codebyNJ/minimo/internal/provider"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
 	_ "github.com/codebyNJ/minimo/internal/provider/codex"
@@ -39,23 +40,25 @@ func main() {
 		provider.Register(p)
 	}
 
+	catalog := pricing.Load(context.Background())
+
 	if len(os.Args) < 2 {
-		runTUI(cfg)
+		runTUI(cfg, catalog)
 		return
 	}
 	switch os.Args[1] {
 	case "status":
-		runStatus(os.Args[2:], cfg)
+		runStatus(os.Args[2:], cfg, catalog)
 	case "export":
-		runExport(os.Args[2:], cfg)
+		runExport(os.Args[2:], cfg, catalog)
 	default:
 		fmt.Fprintln(os.Stderr, "usage: ctx [opens TUI] | ctx status [--watch] | ctx export <session-id> [--with-content]")
 		os.Exit(1)
 	}
 }
 
-func runTUI(cfg config.Config) {
-	e := engine.New(cfg)
+func runTUI(cfg config.Config, catalog pricing.Catalog) {
+	e := engine.New(cfg, catalog)
 	if err := e.Refresh(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -87,7 +90,7 @@ func runTUI(cfg config.Config) {
 	}
 }
 
-func runStatus(args []string, cfg config.Config) {
+func runStatus(args []string, cfg config.Config, catalog pricing.Catalog) {
 	watch := false
 	for _, a := range args {
 		if a == "--watch" {
@@ -95,7 +98,7 @@ func runStatus(args []string, cfg config.Config) {
 		}
 	}
 
-	e := engine.New(cfg)
+	e := engine.New(cfg, catalog)
 
 	if !watch {
 		if err := e.Refresh(); err != nil {
@@ -109,7 +112,7 @@ func runStatus(args []string, cfg config.Config) {
 	runWatch(e, cfg)
 }
 
-func runExport(args []string, cfg config.Config) {
+func runExport(args []string, cfg config.Config, catalog pricing.Catalog) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: ctx export <session-id> [--with-content]")
 		os.Exit(1)
@@ -122,7 +125,7 @@ func runExport(args []string, cfg config.Config) {
 		}
 	}
 
-	e := engine.New(cfg)
+	e := engine.New(cfg, catalog)
 	if err := e.Refresh(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)

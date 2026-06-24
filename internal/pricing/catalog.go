@@ -68,6 +68,12 @@ func normalizeModel(s string) string {
 	return dateSuffix.ReplaceAllString(s, "")
 }
 
+// LoadFromBytes parses an in-memory LiteLLM catalog. Used for tests and any
+// caller that already holds the JSON.
+func LoadFromBytes(data []byte) (Catalog, error) {
+	return parseLiteLLM(data)
+}
+
 func (c Catalog) Lookup(model string) (Entry, bool) {
 	if e, ok := c.entries[model]; ok {
 		return e, true
