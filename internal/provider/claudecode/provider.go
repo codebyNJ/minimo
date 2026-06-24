@@ -150,8 +150,15 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 	live := p.loadLiveRegistry()
 	return &provider.SessionContext{
 		Session: state.info(p.Name(), p.statusFor(sessionID, state, live)),
-		Tokens:  provider.TokenUsage{Total: state.tokens, Source: provider.TokenSourceExact},
-		Files:   state.fileRefs(),
+		Tokens: provider.TokenUsage{
+			Total:         state.tokens,
+			Input:         state.inputTokens,
+			Output:        state.outputTokens,
+			CacheRead:     state.cacheReadTokens,
+			CacheCreation: state.cacheCreationTokens,
+			Source:        provider.TokenSourceExact,
+		},
+		Files: state.fileRefs(),
 		Context: provider.ContextUsage{
 			Tokens: state.contextTokens,
 			Known:  state.model != "",
