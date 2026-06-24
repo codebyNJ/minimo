@@ -54,3 +54,14 @@ func TestApplyOverridesNoop(t *testing.T) {
 		t.Fatalf("empty flags must not change config")
 	}
 }
+
+func TestExportNoLongerASubcommand(t *testing.T) {
+	// "export" must not be treated as a subcommand; only "status" is.
+	f, err := parseArgs([]string{"export"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if f.subcommand == "export" {
+		t.Fatal("export must no longer be a recognized subcommand")
+	}
+}

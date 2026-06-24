@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/codebyNJ/minimo/internal/config"
 	"github.com/codebyNJ/minimo/internal/engine"
-	"github.com/codebyNJ/minimo/internal/export"
 	"github.com/codebyNJ/minimo/internal/format"
 	"github.com/codebyNJ/minimo/internal/logging"
 	"github.com/codebyNJ/minimo/internal/pricing"
@@ -185,40 +183,6 @@ func runStatus(f cliFlags, cfg config.Config, catalog pricing.Catalog) {
 	}
 
 	runWatch(e, cfg)
-}
-
-func runExport(args []string, cfg config.Config, catalog pricing.Catalog) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: ctx export <session-id> [--with-content]")
-		os.Exit(1)
-	}
-	sessionID := args[0]
-	withContent := false
-	for _, a := range args[1:] {
-		if a == "--with-content" {
-			withContent = true
-		}
-	}
-
-	e := engine.New(cfg, catalog)
-	if err := e.Refresh(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-
-	ctx, ok := e.Store.Get(sessionID)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "error: unknown session %q\n", sessionID)
-		os.Exit(1)
-	}
-
-	out := export.Build(ctx, withContent)
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	fmt.Println(string(data))
 }
 
 func runWatch(e *engine.Engine, cfg config.Config) {
