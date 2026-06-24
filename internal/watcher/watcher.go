@@ -89,13 +89,19 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 	path := ev.Name
 	// Delete the entry when the timer fires; otherwise w.timers accumulates one
 	// dead entry per distinct path touched and grows unbounded over a long
-	// session monitoring hundreds of JSONL files.
-	w.timers[path] = time.AfterFunc(w.debounce, func() {
+	// session monitoring hundreds of JSONL files. The fired timer only removes
+	// its own entry — if a newer write already replaced it, that newer timer
+	// stays installed so rapid writes keep coalescing.
+	var t *time.Timer
+	t = time.AfterFunc(w.debounce, func() {
 		w.mu.Lock()
-		delete(w.timers, path)
+		if w.timers[path] == t {
+			delete(w.timers, path)
+		}
 		w.mu.Unlock()
 		w.Events <- path
 	})
+	w.timers[path] = t
 }
 
 // pendingTimers reports how many debounce timers are currently tracked. Used
