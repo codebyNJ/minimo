@@ -43,6 +43,9 @@ func FormatCost(c provider.Cost) string {
 	if !c.Known {
 		return "-"
 	}
+	if c.Source == provider.CostSourceEstimated {
+		return fmt.Sprintf("~$%.4f", c.USD)
+	}
 	return fmt.Sprintf("$%.4f", c.USD)
 }
 
