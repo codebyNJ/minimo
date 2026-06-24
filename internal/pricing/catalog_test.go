@@ -7,6 +7,22 @@ import (
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
+func TestContextWindowFromMaxInputTokens(t *testing.T) {
+	cat, _ := parseLiteLLM([]byte(`{
+	  "with-window": {"input_cost_per_token": 0.000001, "max_input_tokens": 200000},
+	  "no-window":   {"input_cost_per_token": 0.000001}
+	}`))
+	if w, ok := cat.ContextWindow("with-window"); !ok || w != 200000 {
+		t.Fatalf("with-window = (%d, %v), want (200000, true)", w, ok)
+	}
+	if _, ok := cat.ContextWindow("no-window"); ok {
+		t.Fatal("a model without max_input_tokens must return ok=false, not a guessed window")
+	}
+	if _, ok := cat.ContextWindow("unknown-model"); ok {
+		t.Fatal("an unrecognized model must return ok=false")
+	}
+}
+
 const sampleJSON = `{
   "sample_spec": {"litellm_provider": "x"},
   "claude-sonnet-4-6": {

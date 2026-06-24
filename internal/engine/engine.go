@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/codebyNJ/minimo/internal/config"
+	"github.com/codebyNJ/minimo/internal/logging"
 	"github.com/codebyNJ/minimo/internal/pricing"
 	"github.com/codebyNJ/minimo/internal/provider"
 )
@@ -44,16 +45,21 @@ func (e *Engine) Refresh() error {
 		}
 		sessions, err := p.ListSessions()
 		if err != nil {
+			// Whole provider dropped this cycle — surface it for `--debug`
+			// users rather than silently showing an empty list.
+			logging.Errorf("%s: list sessions failed: %v", p.Name(), err)
 			continue
 		}
 		for _, s := range sessions {
 			ctx, err := p.ReadContext(s.ID)
 			if err != nil {
+				logging.Debugf("%s: read context for session %s failed: %v", p.Name(), s.ID, err)
 				continue
 			}
 			if cost, changed := estimatedCost(e.catalog, *ctx); changed {
 				ctx.Cost = cost
 			}
+			backfillContextLimit(e.catalog, ctx)
 			e.Store.Put(s.ID, *ctx)
 		}
 	}
@@ -71,6 +77,20 @@ func estimatedCost(cat pricing.Catalog, c provider.SessionContext) (provider.Cos
 		return provider.Cost{USD: usd, Known: true, Source: provider.CostSourceEstimated}, true
 	}
 	return c.Cost, false
+}
+
+// backfillContextLimit fills a missing context-window denominator from the
+// pricing catalog, so models a provider didn't hardcode a window for can
+// still show a percentage bar. It only acts when the provider reported known
+// context usage with no limit and the catalog actually carries a window —
+// never inventing a denominator (a 0 limit stays 0, rendering a raw count).
+func backfillContextLimit(cat pricing.Catalog, c *provider.SessionContext) {
+	if !c.Context.Known || c.Context.Limit > 0 {
+		return
+	}
+	if win, ok := cat.ContextWindow(c.Session.Model); ok {
+		c.Context.Limit = win
+	}
 }
 
 type ProviderStatus struct {

@@ -17,6 +17,12 @@ func TestEmbeddedSnapshotParses(t *testing.T) {
 	if _, ok := cat.Lookup("gpt-4o"); !ok {
 		t.Fatal("expected gpt-4o in embedded snapshot")
 	}
+	// gpt-4o's context window must come through as a real number, proving the
+	// max_input_tokens parse (which the catalog also encodes as a string for
+	// its schema placeholder) survives the real snapshot.
+	if w, ok := cat.ContextWindow("gpt-4o"); !ok || w <= 0 {
+		t.Fatalf("gpt-4o context window = (%d, %v), want a positive value", w, ok)
+	}
 }
 
 func TestLoadFallsBackToSnapshotOnCanceledContext(t *testing.T) {

@@ -3,6 +3,7 @@ package pricing
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/codebyNJ/minimo/internal/provider"
@@ -16,6 +17,9 @@ type Entry struct {
 	OutputPerMTok        float64
 	CacheReadPerMTok     float64
 	CacheCreationPerMTok float64
+	// ContextWindow is the model's input context size in tokens
+	// (LiteLLM's max_input_tokens), or 0 when the catalog doesn't list one.
+	ContextWindow int
 }
 
 type Catalog struct {
@@ -28,6 +32,25 @@ type litellmEntry struct {
 	OutputCostPerToken        float64  `json:"output_cost_per_token"`
 	CacheReadInputTokenCost   float64  `json:"cache_read_input_token_cost"`
 	CacheCreationInputTokCost float64  `json:"cache_creation_input_token_cost"`
+	MaxInputTokens            flexInt  `json:"max_input_tokens"`
+}
+
+// flexInt is a JSON integer that tolerates the value being encoded as a
+// string or a float — LiteLLM's catalog does both (and its "sample_spec"
+// schema entry even puts a sentence there). Anything unparseable decodes to 0
+// without failing the surrounding object, so one malformed field never aborts
+// the entire catalog parse.
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return nil
+	}
+	if v, err := strconv.ParseFloat(s, 64); err == nil {
+		*f = flexInt(int(v))
+	}
+	return nil
 }
 
 func parseLiteLLM(data []byte) (Catalog, error) {
@@ -49,6 +72,7 @@ func parseLiteLLM(data []byte) (Catalog, error) {
 			OutputPerMTok:        le.OutputCostPerToken * perMTok,
 			CacheReadPerMTok:     le.CacheReadInputTokenCost * perMTok,
 			CacheCreationPerMTok: le.CacheCreationInputTokCost * perMTok,
+			ContextWindow:        int(le.MaxInputTokens),
 		}
 		cat.entries[name] = e
 		n := normalizeModel(name)
@@ -82,6 +106,17 @@ func (c Catalog) Lookup(model string) (Entry, bool) {
 		return e, true
 	}
 	return Entry{}, false
+}
+
+// ContextWindow returns the model's context-window size in tokens. ok is
+// false for an unrecognized model or one the catalog lists without a window,
+// so callers never display a percentage against a guessed denominator.
+func (c Catalog) ContextWindow(model string) (int, bool) {
+	e, ok := c.Lookup(model)
+	if !ok || e.ContextWindow <= 0 {
+		return 0, false
+	}
+	return e.ContextWindow, true
 }
 
 // Estimate prices the lifetime token categories. Returns ok=false for an

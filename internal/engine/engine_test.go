@@ -35,3 +35,49 @@ func TestEstimatedCostLeavesExactUntouched(t *testing.T) {
 		t.Fatal("must not overwrite an exact cost")
 	}
 }
+
+func TestBackfillContextLimitFromCatalog(t *testing.T) {
+	cat, _ := pricing.LoadFromBytes([]byte(`{"m1":{"input_cost_per_token":0.000001,"max_input_tokens":200000}}`))
+	c := provider.SessionContext{
+		Session: provider.SessionInfo{Model: "m1"},
+		Context: provider.ContextUsage{Tokens: 1000, Known: true, Limit: 0},
+	}
+	backfillContextLimit(cat, &c)
+	if c.Context.Limit != 200000 {
+		t.Fatalf("limit = %d, want 200000 (backfilled from catalog)", c.Context.Limit)
+	}
+}
+
+func TestBackfillContextLimitLeavesProviderLimit(t *testing.T) {
+	cat, _ := pricing.LoadFromBytes([]byte(`{"m1":{"input_cost_per_token":0.000001,"max_input_tokens":200000}}`))
+	c := provider.SessionContext{
+		Session: provider.SessionInfo{Model: "m1"},
+		Context: provider.ContextUsage{Tokens: 1000, Known: true, Limit: 999},
+	}
+	backfillContextLimit(cat, &c)
+	if c.Context.Limit != 999 {
+		t.Fatalf("limit = %d, want 999 — a provider-supplied limit must win", c.Context.Limit)
+	}
+}
+
+func TestBackfillContextLimitSkipsUnknownContextAndModel(t *testing.T) {
+	cat, _ := pricing.LoadFromBytes([]byte(`{"m1":{"input_cost_per_token":0.000001,"max_input_tokens":200000}}`))
+	// Unknown context usage stays untouched even if the model has a window.
+	unknown := provider.SessionContext{
+		Session: provider.SessionInfo{Model: "m1"},
+		Context: provider.ContextUsage{Known: false},
+	}
+	backfillContextLimit(cat, &unknown)
+	if unknown.Context.Limit != 0 || unknown.Context.Known {
+		t.Fatalf("unknown context must stay unknown with 0 limit, got %+v", unknown.Context)
+	}
+	// Known context with a model the catalog doesn't have gets no denominator.
+	noModel := provider.SessionContext{
+		Session: provider.SessionInfo{Model: "mystery"},
+		Context: provider.ContextUsage{Tokens: 1000, Known: true, Limit: 0},
+	}
+	backfillContextLimit(cat, &noModel)
+	if noModel.Context.Limit != 0 {
+		t.Fatalf("unknown model must not get a guessed limit, got %d", noModel.Context.Limit)
+	}
+}
