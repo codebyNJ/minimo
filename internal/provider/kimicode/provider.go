@@ -151,7 +151,14 @@ func (p *KimiCodeProvider) ReadContext(sessionID string) (*provider.SessionConte
 	}
 	return &provider.SessionContext{
 		Session: p.info(sessionID, &ts.state),
-		Tokens:  provider.TokenUsage{Total: ts.state.tokens, Source: provider.TokenSourceExact},
+		Tokens: provider.TokenUsage{
+			Total:         ts.state.tokens,
+			Input:         ts.state.inputTokens,
+			Output:        ts.state.outputTokens,
+			CacheRead:     ts.state.cacheReadTokens,
+			CacheCreation: ts.state.cacheCreationTokens,
+			Source:        provider.TokenSourceExact,
+		},
 		Context: provider.ContextUsage{
 			Tokens: ts.state.contextTokens,
 			Known:  ts.state.contextKnown,
