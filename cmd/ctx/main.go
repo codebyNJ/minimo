@@ -151,6 +151,7 @@ func runTUI(cfg config.Config, catalog pricing.Catalog) {
 	go func() {
 		if err := watchLoop(watchCtx, cfg, func() {
 			if err := e.Refresh(); err != nil {
+				logging.Debugf("tui refresh failed, showing prior data: %v", err)
 				return
 			}
 			p.Send(ui.RefreshMsg{})

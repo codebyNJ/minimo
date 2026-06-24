@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/codebyNJ/minimo/internal/logging"
 )
 
 type Watcher struct {
@@ -67,7 +69,11 @@ func (w *Watcher) Run(ctx context.Context) {
 func (w *Watcher) handle(ev fsnotify.Event) {
 	if ev.Op&fsnotify.Create != 0 {
 		if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-			_ = w.fsw.Add(ev.Name)
+			if err := w.fsw.Add(ev.Name); err != nil {
+				// New subdirectory won't be watched; sessions created under it
+				// surface on the next poll tick instead of immediately.
+				logging.Debugf("watcher: add %s failed: %v", ev.Name, err)
+			}
 			return
 		}
 	}

@@ -6,6 +6,8 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/codebyNJ/minimo/internal/logging"
 )
 
 type spec struct {
@@ -39,6 +41,9 @@ func LoadAll(dir string) []*Provider {
 	for _, path := range matches {
 		p, err := loadOne(path)
 		if err != nil {
+			// A malformed provider spec drops that whole provider; log it so
+			// a user who wrote the YAML can see why it never appeared.
+			logging.Errorf("configprovider: skipping %s: %v", path, err)
 			continue
 		}
 		out = append(out, p)
