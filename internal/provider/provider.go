@@ -10,6 +10,25 @@ const (
 	StatusEnded  SessionStatus = "ended"
 )
 
+// IdleThreshold is how long a session may go without fresh activity before
+// it stops counting as active/idle. Shared by every provider so the cutoff
+// stays consistent across harnesses — it previously lived as an identical
+// `const idleThreshold` copied into five provider files that could silently
+// drift apart.
+const IdleThreshold = 30 * time.Second
+
+// ParseTimestamp parses an RFC3339 timestamp, reporting ok=false on any
+// malformed value rather than returning a zero time that a caller might
+// mistake for a real one. Shared by the JSONL-backed providers, which all
+// emit RFC3339.
+func ParseTimestamp(s string) (time.Time, bool) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 type TokenSource int
 
 const (

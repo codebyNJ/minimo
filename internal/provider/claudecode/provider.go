@@ -13,8 +13,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -88,7 +86,7 @@ func (p *ClaudeCodeProvider) statusFor(id string, s *sessionState, live map[stri
 	if entry, ok := live[id]; ok && isAlive(entry.PID) {
 		return provider.StatusActive
 	}
-	if !s.lastActive.IsZero() && time.Since(s.lastActive) < idleThreshold {
+	if !s.lastActive.IsZero() && time.Since(s.lastActive) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded

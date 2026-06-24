@@ -11,8 +11,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -91,7 +89,7 @@ func (p *KimiCodeProvider) findWireLogs() map[string]string {
 }
 
 func (p *KimiCodeProvider) statusFor(s *sessionState) provider.SessionStatus {
-	if !s.lastActive.IsZero() && time.Since(s.lastActive) < idleThreshold {
+	if !s.lastActive.IsZero() && time.Since(s.lastActive) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded

@@ -12,8 +12,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -65,7 +63,7 @@ func (p *OpenCodeProvider) statusFor(r sessionRow) provider.SessionStatus {
 	if r.timeArchived.Valid {
 		return provider.StatusEnded
 	}
-	if time.Since(epochMillis(r.timeUpdated)) < idleThreshold {
+	if time.Since(epochMillis(r.timeUpdated)) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded

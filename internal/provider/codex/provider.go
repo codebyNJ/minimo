@@ -13,8 +13,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -85,7 +83,7 @@ func sessionIDFromPath(path string) string {
 }
 
 func (p *CodexProvider) statusFor(s *sessionState) provider.SessionStatus {
-	if !s.lastActive.IsZero() && time.Since(s.lastActive) < idleThreshold {
+	if !s.lastActive.IsZero() && time.Since(s.lastActive) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded

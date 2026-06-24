@@ -11,8 +11,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
-const idleThreshold = 30 * time.Second
-
 type Provider struct {
 	spec      spec
 	sessionRe *regexp.Regexp
@@ -50,7 +48,7 @@ func (p *Provider) Detect() bool {
 }
 
 func (p *Provider) statusFor(modTime time.Time) provider.SessionStatus {
-	if time.Since(modTime) < idleThreshold {
+	if time.Since(modTime) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded

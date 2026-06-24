@@ -27,7 +27,7 @@ type sessionState struct {
 
 func (s *sessionState) applyNew(data []byte) {
 	for _, l := range parseRolloutLines(data) {
-		if ts, ok := parseTimestamp(l.Timestamp); ok {
+		if ts, ok := provider.ParseTimestamp(l.Timestamp); ok {
 			if s.startedAt.IsZero() {
 				s.startedAt = ts
 			}

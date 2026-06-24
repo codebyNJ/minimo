@@ -2,6 +2,24 @@ package provider
 
 import "testing"
 
+func TestParseTimestampValidRFC3339(t *testing.T) {
+	ts, ok := ParseTimestamp("2026-06-24T13:05:00Z")
+	if !ok {
+		t.Fatal("valid RFC3339 must parse")
+	}
+	if ts.Year() != 2026 || ts.Month() != 6 || ts.Day() != 24 {
+		t.Fatalf("parsed wrong instant: %v", ts)
+	}
+}
+
+func TestParseTimestampMalformedReportsNotOK(t *testing.T) {
+	for _, in := range []string{"", "not-a-time", "2026/06/24 13:05", "1719234300"} {
+		if ts, ok := ParseTimestamp(in); ok {
+			t.Fatalf("ParseTimestamp(%q) = (%v, true), want ok=false", in, ts)
+		}
+	}
+}
+
 func TestCostSourceZeroValueIsExact(t *testing.T) {
 	// An unset Cost.Source must mean "exact" so that providers reporting
 	// native cost without setting Source are never mislabeled "estimated".
