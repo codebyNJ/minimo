@@ -40,3 +40,29 @@ enabled_providers: []   # empty = all providers enabled
 1. Build with the command above.
 2. Run `./bin/ctx status` first — confirms it can find your Claude Code/OpenCode session data and prints a flat table.
 3. Run `./bin/ctx` to launch the TUI and confirm the same sessions render with context bars, cost, and live updates while you use an agent in another terminal.
+
+## Docker
+
+`ctx` runs as a tiny (~10MB) static image. It only ever reads agent session
+files, so all mounts are read-only.
+
+Build and run directly:
+
+```bash
+docker build -t ctx .
+docker run --rm -it \
+  -v "$HOME/.claude:/home/nonroot/.claude:ro" \
+  -v "$HOME/.claude.json:/home/nonroot/.claude.json:ro" \
+  -v "$(pwd)/docker-config.yaml:/home/nonroot/.ctx/config.yaml:ro" \
+  ctx
+```
+
+Or with Compose (mounts `~/.claude` and `~/.codex` by default):
+
+```bash
+docker compose run --rm ctx
+```
+
+`docker-config.yaml` maps each provider to its container-side mount via
+`provider_paths`. Mount only the providers you use; unmounted ones simply
+report "not found".

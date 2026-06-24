@@ -1,0 +1,5 @@
+# Example config for the docker-compose service. Container-side paths match
+# the read-only bind mounts in docker-compose.yml.
+provider_paths:
+  claude-code: /home/nonroot/.claude
+  codex: /home/nonroot/.codex
