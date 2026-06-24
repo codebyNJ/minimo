@@ -81,9 +81,23 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		t.Stop()
 	}
 	path := ev.Name
+	// Delete the entry when the timer fires; otherwise w.timers accumulates one
+	// dead entry per distinct path touched and grows unbounded over a long
+	// session monitoring hundreds of JSONL files.
 	w.timers[path] = time.AfterFunc(w.debounce, func() {
+		w.mu.Lock()
+		delete(w.timers, path)
+		w.mu.Unlock()
 		w.Events <- path
 	})
+}
+
+// pendingTimers reports how many debounce timers are currently tracked. Used
+// by tests to assert the map does not leak after timers fire.
+func (w *Watcher) pendingTimers() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.timers)
 }
 
 func (w *Watcher) Close() error {
