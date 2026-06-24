@@ -31,6 +31,20 @@ import (
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
+// applyOverrides layers one-run CLI flag values over the loaded config.
+func applyOverrides(cfg config.Config, f cliFlags) config.Config {
+	if f.update > 0 {
+		cfg.PollIntervalSec = f.update / 1000
+		if cfg.PollIntervalSec < 1 {
+			cfg.PollIntervalSec = 1
+		}
+	}
+	if f.provider != "" {
+		cfg.EnabledProviders = []string{f.provider}
+	}
+	return cfg
+}
+
 func main() {
 	f, err := parseArgs(os.Args[1:])
 	if err != nil {
@@ -70,6 +84,7 @@ func main() {
 	for name, path := range cfg.ProviderPaths {
 		provider.SetPathOverride(name, path)
 	}
+	cfg = applyOverrides(cfg, f)
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
 	}
