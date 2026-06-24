@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"sort"
@@ -27,6 +28,9 @@ import (
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
+// version is overridden at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	cfg, err := config.Load(config.DefaultPath())
 	if err != nil {
@@ -40,21 +44,46 @@ func main() {
 		provider.Register(p)
 	}
 
-	catalog := pricing.Load(context.Background())
-
-	if len(os.Args) < 2 {
-		runTUI(cfg, catalog)
+	f, err := parseArgs(os.Args[1:])
+	if err != nil {
+		os.Exit(2) // flag package already printed the error
+	}
+	if f.help {
+		printUsage(os.Stdout)
 		return
 	}
-	switch os.Args[1] {
-	case "status":
-		runStatus(os.Args[2:], cfg, catalog)
-	case "export":
-		runExport(os.Args[2:], cfg, catalog)
-	default:
-		fmt.Fprintln(os.Stderr, "usage: ctx [opens TUI] | ctx status [--watch] | ctx export <session-id> [--with-content]")
-		os.Exit(1)
+	if f.version {
+		fmt.Println("ctx", version)
+		return
 	}
+
+	catalog := pricing.Load(context.Background())
+
+	switch f.subcommand {
+	case "status":
+		runStatus(f, cfg, catalog)
+	default:
+		runTUI(cfg, catalog)
+	}
+}
+
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, `ctx — terminal context monitor for AI coding agents
+
+Usage:
+  ctx [flags]            open the TUI dashboard
+  ctx status [--watch]   print a flat session table (optionally re-rendering)
+
+Flags:
+  -c, --config <path>    use an alternate config file
+  -u, --update <ms>      override the poll interval for this run
+      --provider <name>  restrict to one provider (claude-code|opencode|codex|kimi-code)
+      --theme <name>     color theme: default or mono
+      --no-color         disable colored output
+      --debug            write debug logs to ~/.ctx/ctx.log
+      --default-config   print the default config YAML and exit
+  -V, --version          print version and exit
+  -h, --help             show this help and exit`)
 }
 
 func runTUI(cfg config.Config, catalog pricing.Catalog) {
@@ -90,13 +119,8 @@ func runTUI(cfg config.Config, catalog pricing.Catalog) {
 	}
 }
 
-func runStatus(args []string, cfg config.Config, catalog pricing.Catalog) {
-	watch := false
-	for _, a := range args {
-		if a == "--watch" {
-			watch = true
-		}
-	}
+func runStatus(f cliFlags, cfg config.Config, catalog pricing.Catalog) {
+	watch := f.watch
 
 	e := engine.New(cfg, catalog)
 
