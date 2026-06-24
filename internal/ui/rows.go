@@ -41,8 +41,6 @@ func rowsToTableRows(rows []provider.SessionContext) []table.Row {
 			fmt.Sprintf("%d", r.Tokens.Total),
 			format.FormatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),
-			format.Truncate(r.Session.CWD, 24),
-			r.Session.Label,
 		})
 	}
 	return out
@@ -57,8 +55,6 @@ func tableColumns() []table.Column {
 		{Title: "LIFETIME", Width: 10},
 		{Title: "COST", Width: 9},
 		{Title: "LAST", Width: 10},
-		{Title: "CWD", Width: 24},
-		{Title: "LABEL", Width: 30},
 	}
 }
 
