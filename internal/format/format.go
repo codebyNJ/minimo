@@ -2,6 +2,7 @@ package format
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/codebyNJ/minimo/internal/provider"
 )
@@ -57,4 +58,16 @@ func TruncateRight(s string, n int) string {
 		return s
 	}
 	return s[:n-3] + "..."
+}
+
+// PrettifyTier turns a raw tier token ("team_premium") into a display string
+// ("Team Premium"): underscores to spaces, each word capitalized.
+func PrettifyTier(s string) string {
+	parts := strings.Split(strings.ReplaceAll(s, "_", " "), " ")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, " ")
 }
