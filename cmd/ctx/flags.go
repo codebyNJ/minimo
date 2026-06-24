@@ -12,7 +12,7 @@ type cliFlags struct {
 	noColor       bool
 	debug         bool
 	defaultConfig bool
-	subcommand    string // "" (TUI) or "status"
+	subcommand    string // "" (TUI), "status", or "stats"
 	watch         bool   // status --watch
 }
 
@@ -36,10 +36,10 @@ func registerCommon(fs *flag.FlagSet, f *cliFlags) {
 func parseArgs(args []string) (cliFlags, error) {
 	var f cliFlags
 
-	// Subcommand is the first non-flag argument when it is "status".
+	// Subcommand is the first non-flag argument when it is a recognized one.
 	rest := args
-	if len(args) > 0 && args[0] == "status" {
-		f.subcommand = "status"
+	if len(args) > 0 && (args[0] == "status" || args[0] == "stats") {
+		f.subcommand = args[0]
 		rest = args[1:]
 	}
 

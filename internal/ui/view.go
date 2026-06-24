@@ -16,6 +16,9 @@ const headerHeight = 3
 var headerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginBottom(1)
 
 func (m Model) View() string {
+	if m.statsView {
+		return renderStats(m.stats)
+	}
 	header := renderHeader(m.rows, m.showHistory) + "\n" + renderProviderStatus(m.statuses)
 	out := headerStyle.Render(header) + "\n" +
 		renderProviderPanels(m.statuses, m.rows) + "\n" +
@@ -79,7 +82,7 @@ func renderHeader(rows []provider.SessionContext, showHistory bool) string {
 	if showHistory {
 		scope = "all"
 	}
-	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · $%.2f total · q quit · h history", len(rows), scope, active, totalCost)
+	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · $%.2f total · h history · s stats · q quit", len(rows), scope, active, totalCost)
 }
 
 // renderProviderStatus shows every registered provider's detection

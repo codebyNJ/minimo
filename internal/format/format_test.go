@@ -2,9 +2,40 @@ package format
 
 import (
 	"testing"
+	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
 )
+
+func TestFormatCountBillions(t *testing.T) {
+	cases := map[int]string{
+		1_200_000_000: "1.2B",
+		999_500_000:   "1.0B", // promotes from "1000.0M"
+		481_702_176:   "481.7M",
+		3_930_330:     "3.9M",
+	}
+	for n, want := range cases {
+		if got := FormatCount(n); got != want {
+			t.Fatalf("FormatCount(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	cases := map[time.Duration]string{
+		0:                              "0m",
+		30 * time.Second:               "30s",
+		5 * time.Minute:                "5m",
+		144 * time.Minute:              "2h24m",
+		9*time.Hour + 40*time.Minute:   "9h40m",
+		34*time.Hour + 7*time.Minute:   "34h07m",
+	}
+	for d, want := range cases {
+		if got := FormatDuration(d); got != want {
+			t.Fatalf("FormatDuration(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
 
 func TestPrettifyTier(t *testing.T) {
 	cases := map[string]string{

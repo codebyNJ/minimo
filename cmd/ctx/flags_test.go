@@ -35,6 +35,18 @@ func TestParseArgsStatusWatch(t *testing.T) {
 	}
 }
 
+func TestParseArgsStats(t *testing.T) {
+	f, err := parseArgs([]string{"stats"})
+	if err != nil || f.subcommand != "stats" {
+		t.Fatalf("stats: subcommand=%q err=%v, want stats", f.subcommand, err)
+	}
+	// Global flags still apply to a subcommand.
+	f2, err := parseArgs([]string{"stats", "--no-color"})
+	if err != nil || f2.subcommand != "stats" || !f2.noColor {
+		t.Fatalf("stats --no-color: %+v err=%v", f2, err)
+	}
+}
+
 func TestApplyOverrides(t *testing.T) {
 	base := config.Default()
 	f := cliFlags{update: 5000, provider: "codex"}

@@ -25,6 +25,7 @@ import (
 	_ "github.com/codebyNJ/minimo/internal/provider/kimicode"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/ui"
+	"github.com/codebyNJ/minimo/internal/usage"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
@@ -111,6 +112,8 @@ func main() {
 	switch f.subcommand {
 	case "status":
 		runStatus(f, cfg, catalog)
+	case "stats":
+		runStats(cfg, catalog)
 	default:
 		runTUI(cfg, catalog)
 	}
@@ -122,6 +125,7 @@ func printUsage(w io.Writer) {
 Usage:
   ctx [flags]            open the TUI dashboard
   ctx status [--watch]   print a flat session table (optionally re-rendering)
+  ctx stats              print per-model cost & time usage for 24h/7d/30d
 
 Flags:
   -c, --config <path>    use an alternate config file
@@ -184,6 +188,42 @@ func runStatus(f cliFlags, cfg config.Config, catalog pricing.Catalog) {
 	}
 
 	runWatch(e, cfg)
+}
+
+func runStats(cfg config.Config, catalog pricing.Catalog) {
+	e := engine.New(cfg, catalog)
+	if err := e.Refresh(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	printStats(usage.Build(e.Store.All(), time.Now()))
+}
+
+// printStats renders the per-model usage report as one flat section per window.
+func printStats(rep usage.Report) {
+	for _, w := range rep.Windows {
+		fmt.Printf("\n== %s (%s) ==\n", w.Window.Name, w.Window.Label)
+		if len(w.Models) == 0 {
+			fmt.Println("  (no activity)")
+			continue
+		}
+		fmt.Printf("%-20s %5s  %-10s %-9s %-9s %6s\n",
+			"MODEL", "SESS", "COST", "TOKENS", "USED", "USE%")
+		for _, m := range w.Models {
+			cost := provider.Cost{USD: m.TotalCost, Known: m.CostKnown}
+			if m.Estimated {
+				cost.Source = provider.CostSourceEstimated
+			}
+			fmt.Printf("%-20s %5d  %-10s %-9s %-9s %5.1f%%\n",
+				format.TruncateRight(m.Model, 20),
+				m.Sessions,
+				format.FormatCost(cost),
+				format.FormatCount(m.Tokens),
+				format.FormatDuration(m.UsedTime),
+				m.UsedFraction*100,
+			)
+		}
+	}
 }
 
 func runWatch(e *engine.Engine, cfg config.Config) {

@@ -1,7 +1,11 @@
 package ui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/codebyNJ/minimo/internal/usage"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -14,12 +18,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case RefreshMsg:
 		m.rows = visibleRows(m.store, m.showHistory)
 		m.table.SetRows(rowsToTableRows(m.rows))
+		if m.statsView {
+			m.stats = usage.Build(m.store.All(), time.Now())
+		}
 		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "s":
+			m.statsView = !m.statsView
+			if m.statsView {
+				m.stats = usage.Build(m.store.All(), time.Now())
+			}
+			return m, nil
 		case "h":
 			m.showHistory = !m.showHistory
 			m.rows = visibleRows(m.store, m.showHistory)
@@ -29,6 +42,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.expandedID = toggleExpand(m.expandedID, selectedSessionID(m))
 			return m, nil
 		}
+	}
+
+	// The stats screen is non-interactive; don't feed keys to the table.
+	if m.statsView {
+		return m, nil
 	}
 
 	var cmd tea.Cmd

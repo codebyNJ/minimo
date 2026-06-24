@@ -3,6 +3,7 @@ package format
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
 )
@@ -16,7 +17,13 @@ func EmptyDash(s string) string {
 
 func FormatCount(n int) string {
 	switch {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.1fB", float64(n)/1_000_000_000)
 	case n >= 1_000_000:
+		// 999.5M+ would round up to "1000.0M"; promote to "1.0B".
+		if float64(n)/1_000_000 >= 999.5 {
+			return fmt.Sprintf("%.1fB", float64(n)/1_000_000_000)
+		}
 		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	case n >= 1_000:
 		// 999,500–999,999 would round up to "1000K"; promote to "1.0M".
@@ -27,6 +34,23 @@ func FormatCount(n int) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+// FormatDuration renders a span as compact "Xh YYm" / "Ym" / "Ys" for the
+// usage report. Zero or negative renders "0m".
+func FormatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0m"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	h := int(d / time.Hour)
+	m := int((d % time.Hour) / time.Minute)
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm", h, m)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
 func FormatContext(c provider.ContextUsage) string {

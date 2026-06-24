@@ -6,6 +6,7 @@ import (
 
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/provider"
+	"github.com/codebyNJ/minimo/internal/usage"
 )
 
 type RefreshMsg struct{}
@@ -17,6 +18,8 @@ type Model struct {
 	showHistory bool
 	statuses    []engine.ProviderStatus
 	expandedID  string
+	statsView   bool
+	stats       usage.Report
 }
 
 func New(store *engine.StateStore, statuses []engine.ProviderStatus) Model {
