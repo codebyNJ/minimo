@@ -16,6 +16,7 @@ type Model struct {
 	rows        []provider.SessionContext
 	showHistory bool
 	statuses    []engine.ProviderStatus
+	expandedID  string
 }
 
 func New(store *engine.StateStore, statuses []engine.ProviderStatus) Model {

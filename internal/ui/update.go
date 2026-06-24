@@ -25,10 +25,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rows = visibleRows(m.store, m.showHistory)
 			m.table.SetRows(rowsToTableRows(m.rows))
 			return m, nil
+		case "enter":
+			m.expandedID = toggleExpand(m.expandedID, selectedSessionID(m))
+			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
 	return m, cmd
+}
+
+func toggleExpand(current, selected string) string {
+	if selected == "" || current == selected {
+		return ""
+	}
+	return selected
+}
+
+// selectedSessionID returns the session ID for the highlighted table row by
+// matching the visible row index against m.rows (same order as rowsToTableRows).
+func selectedSessionID(m Model) string {
+	i := m.table.Cursor()
+	if i < 0 || i >= len(m.rows) {
+		return ""
+	}
+	return m.rows[i].Session.ID
 }

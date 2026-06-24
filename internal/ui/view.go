@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/codebyNJ/minimo/internal/engine"
+	"github.com/codebyNJ/minimo/internal/format"
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
@@ -16,7 +17,51 @@ var headerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginBo
 
 func (m Model) View() string {
 	header := renderHeader(m.rows, m.showHistory) + "\n" + renderProviderStatus(m.statuses)
-	return headerStyle.Render(header) + "\n" + m.table.View()
+	out := headerStyle.Render(header) + "\n" +
+		renderProviderPanels(m.statuses, m.rows) + "\n" +
+		m.table.View()
+	if m.expandedID != "" {
+		if c, ok := expandedContext(m); ok {
+			out += "\n" + renderExpandDetail(c, planForProvider(m.statuses, c.Session.Provider))
+		}
+	}
+	return out
+}
+
+func expandedContext(m Model) (provider.SessionContext, bool) {
+	for _, r := range m.rows {
+		if r.Session.ID == m.expandedID {
+			return r, true
+		}
+	}
+	return provider.SessionContext{}, false
+}
+
+// planForProvider returns the account plan tier for a provider name (account-
+// level data lives on ProviderStatus, not on a single session).
+func planForProvider(statuses []engine.ProviderStatus, name string) provider.PlanInfo {
+	for _, s := range statuses {
+		if s.Name == name {
+			return s.Plan
+		}
+	}
+	return provider.PlanInfo{}
+}
+
+var detailStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginTop(1)
+
+func renderExpandDetail(c provider.SessionContext, plan provider.PlanInfo) string {
+	lines := []string{}
+	if plan.Known {
+		lines = append(lines, fmt.Sprintf("plan: %s", plan.Tier))
+	}
+	lines = append(lines,
+		fmt.Sprintf("tokens: in %d / out %d / cache-r %d / cache-c %d",
+			c.Tokens.Input, c.Tokens.Output, c.Tokens.CacheRead, c.Tokens.CacheCreation),
+		fmt.Sprintf("cwd: %s", format.EmptyDash(c.Session.CWD)),
+		fmt.Sprintf("label: %s", format.EmptyDash(c.Session.Label)),
+	)
+	return detailStyle.Render(strings.Join(lines, "\n"))
 }
 
 func renderHeader(rows []provider.SessionContext, showHistory bool) string {
