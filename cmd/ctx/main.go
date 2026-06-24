@@ -32,29 +32,46 @@ import (
 var version = "dev"
 
 func main() {
-	cfg, err := config.Load(config.DefaultPath())
+	f, err := parseArgs(os.Args[1:])
+	if err != nil {
+		os.Exit(2) // flag package already printed the error
+	}
+
+	if f.defaultConfig {
+		data, err := config.DefaultYAML()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		os.Stdout.Write(data)
+		return
+	}
+
+	if f.help {
+		printUsage(os.Stdout)
+		return
+	}
+
+	if f.version {
+		fmt.Println("ctx", version)
+		return
+	}
+
+	configPath := config.DefaultPath()
+	if f.config != "" {
+		configPath = f.config
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: failed to load config:", err)
 		os.Exit(1)
 	}
+
 	for name, path := range cfg.ProviderPaths {
 		provider.SetPathOverride(name, path)
 	}
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
-	}
-
-	f, err := parseArgs(os.Args[1:])
-	if err != nil {
-		os.Exit(2) // flag package already printed the error
-	}
-	if f.help {
-		printUsage(os.Stdout)
-		return
-	}
-	if f.version {
-		fmt.Println("ctx", version)
-		return
 	}
 
 	catalog := pricing.Load(context.Background())

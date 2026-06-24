@@ -39,10 +39,19 @@ func Load(path string) (Config, error) {
 		}
 		return cfg, err
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := unmarshal(data, &cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+func unmarshal(data []byte, c *Config) error {
+	return yaml.Unmarshal(data, c)
+}
+
+// DefaultYAML renders the default config as YAML for `ctx --default-config`.
+func DefaultYAML() ([]byte, error) {
+	return yaml.Marshal(Default())
 }
 
 func (c Config) Debounce() time.Duration {
