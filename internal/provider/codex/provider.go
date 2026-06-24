@@ -128,7 +128,14 @@ func (p *CodexProvider) ReadContext(sessionID string) (*provider.SessionContext,
 	state.applyNew(data)
 	return &provider.SessionContext{
 		Session: state.info(p.Name(), p.statusFor(state)),
-		Tokens:  provider.TokenUsage{Total: state.tokens, Source: provider.TokenSourceExact},
+		Tokens: provider.TokenUsage{
+			Total:         state.tokens,
+			Input:         state.inputTokens,
+			Output:        state.outputTokens,
+			CacheRead:     state.cacheReadTokens,
+			CacheCreation: state.cacheCreationTokens,
+			Source:        provider.TokenSourceExact,
+		},
 		Context: provider.ContextUsage{
 			Tokens: state.contextTokens,
 			Known:  state.contextKnown,
