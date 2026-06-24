@@ -120,6 +120,18 @@ func (p *OpenCodeProvider) ListSessions() ([]provider.SessionInfo, error) {
 	return out, nil
 }
 
+func toTokenUsage(r sessionRow) provider.TokenUsage {
+	total := int(r.tokensInput + r.tokensOutput + r.tokensReasoning + r.tokensCacheRead + r.tokensCacheWrite)
+	return provider.TokenUsage{
+		Total:         total,
+		Input:         int(r.tokensInput),
+		Output:        int(r.tokensOutput + r.tokensReasoning),
+		CacheRead:     int(r.tokensCacheRead),
+		CacheCreation: int(r.tokensCacheWrite),
+		Source:        provider.TokenSourceExact,
+	}
+}
+
 func (p *OpenCodeProvider) ReadContext(sessionID string) (*provider.SessionContext, error) {
 	db, err := p.open()
 	if err != nil {
@@ -129,11 +141,10 @@ func (p *OpenCodeProvider) ReadContext(sessionID string) (*provider.SessionConte
 	if err != nil {
 		return nil, err
 	}
-	total := int(r.tokensInput + r.tokensOutput + r.tokensReasoning + r.tokensCacheRead + r.tokensCacheWrite)
 	return &provider.SessionContext{
 		Session: p.toSessionInfo(*r),
-		Tokens:  provider.TokenUsage{Total: total, Source: provider.TokenSourceExact},
-		Cost:    provider.Cost{USD: r.cost, Known: true},
+		Tokens:  toTokenUsage(*r),
+		Cost:    provider.Cost{USD: r.cost, Known: true, Source: provider.CostSourceExact},
 		// Context is left at its zero value (Known: false) — the session
 		// table only has lifetime aggregates, not a latest-turn figure.
 	}, nil
