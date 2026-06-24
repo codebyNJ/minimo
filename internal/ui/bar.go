@@ -13,15 +13,37 @@ import (
 const barWidth = 20
 
 var (
-	barFillLow    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	barFillMid    = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	barFillHigh   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	barEmptyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
-
-	dotActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	dotIdleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	dotEndedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
+	barFillLow     lipgloss.Style
+	barFillMid     lipgloss.Style
+	barFillHigh    lipgloss.Style
+	barEmptyStyle  lipgloss.Style
+	dotActiveStyle lipgloss.Style
+	dotIdleStyle   lipgloss.Style
+	dotEndedStyle  lipgloss.Style
 )
+
+func init() { rebuildStyles() }
+
+func rebuildStyles() {
+	barFillLow = lipgloss.NewStyle().Foreground(active.Low)
+	barFillMid = lipgloss.NewStyle().Foreground(active.Mid)
+	barFillHigh = lipgloss.NewStyle().Foreground(active.High)
+	barEmptyStyle = lipgloss.NewStyle().Foreground(active.Empty)
+	dotActiveStyle = lipgloss.NewStyle().Foreground(active.DotActive)
+	dotIdleStyle = lipgloss.NewStyle().Foreground(active.DotIdle)
+	dotEndedStyle = lipgloss.NewStyle().Foreground(active.DotEnded)
+
+	panelLiveBorder = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(active.PanelLive).
+		Width(panelWidth).Padding(0, 1)
+	panelDeadBorder = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(active.PanelDead).
+		Foreground(active.PanelDead).
+		Width(panelWidth).Padding(0, 1)
+	panelLabel = lipgloss.NewStyle().Foreground(active.Label)
+}
 
 func renderContextBar(c provider.ContextUsage) string {
 	if !c.Known {

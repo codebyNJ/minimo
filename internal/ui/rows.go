@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/format"
@@ -60,7 +59,7 @@ func tableColumns() []table.Column {
 
 func tableStyles() table.Styles {
 	s := table.DefaultStyles()
-	s.Header = s.Header.Bold(true).Foreground(lipgloss.Color("117"))
-	s.Selected = s.Selected.Background(lipgloss.Color("237"))
+	s.Header = s.Header.Bold(true).Foreground(active.Header)
+	s.Selected = s.Selected.Background(active.Empty)
 	return s
 }

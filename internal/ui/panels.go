@@ -13,16 +13,9 @@ import (
 const panelWidth = 18
 
 var (
-	panelLiveBorder = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("42")).
-		Width(panelWidth).Padding(0, 1)
-	panelDeadBorder = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("237")).
-		Foreground(lipgloss.Color("237")).
-		Width(panelWidth).Padding(0, 1)
-	panelLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	panelLiveBorder lipgloss.Style
+	panelDeadBorder lipgloss.Style
+	panelLabel      lipgloss.Style
 )
 
 type providerAggregate struct {

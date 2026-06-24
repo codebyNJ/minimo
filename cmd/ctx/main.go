@@ -85,6 +85,13 @@ func main() {
 		provider.SetPathOverride(name, path)
 	}
 	cfg = applyOverrides(cfg, f)
+
+	themeName := cfg.Theme
+	if f.theme != "" {
+		themeName = f.theme
+	}
+	ui.SetTheme(ui.ThemeByName(themeName, f.noColor))
+
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
 	}
