@@ -43,10 +43,18 @@ func FormatCost(c provider.Cost) string {
 	if !c.Known {
 		return "-"
 	}
+	prefix := "$"
 	if c.Source == provider.CostSourceEstimated {
-		return fmt.Sprintf("~$%.4f", c.USD)
+		prefix = "~$"
 	}
-	return fmt.Sprintf("$%.4f", c.USD)
+	// Dollar-scale figures read better — and fit the COST column — at 2
+	// decimals; sub-dollar costs keep 4 so they stay meaningful. Without this
+	// an estimate like 405.4710 rendered "~$405.4710" (10 chars) and got
+	// truncated to "~$405.47…" in the table.
+	if c.USD >= 1 || c.USD <= -1 {
+		return fmt.Sprintf("%s%.2f", prefix, c.USD)
+	}
+	return fmt.Sprintf("%s%.4f", prefix, c.USD)
 }
 
 func Truncate(s string, n int) string {

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -37,7 +36,7 @@ func rowsToTableRows(rows []provider.SessionContext) []table.Row {
 			r.Session.Provider,
 			format.EmptyDash(format.TruncateRight(r.Session.Model, 18)),
 			renderContextBar(r.Context),
-			fmt.Sprintf("%d", r.Tokens.Total),
+			format.FormatCount(r.Tokens.Total),
 			format.FormatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),
 		})

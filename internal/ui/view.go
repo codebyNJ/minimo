@@ -79,7 +79,7 @@ func renderHeader(rows []provider.SessionContext, showHistory bool) string {
 	if showHistory {
 		scope = "all"
 	}
-	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · $%.4f total · q quit · h history", len(rows), scope, active, totalCost)
+	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · $%.2f total · q quit · h history", len(rows), scope, active, totalCost)
 }
 
 // renderProviderStatus shows every registered provider's detection
