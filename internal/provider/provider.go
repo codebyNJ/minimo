@@ -18,8 +18,12 @@ const (
 )
 
 type TokenUsage struct {
-	Total  int
-	Source TokenSource
+	Total         int
+	Input         int
+	Output        int
+	CacheRead     int
+	CacheCreation int
+	Source        TokenSource
 }
 
 type SessionInfo struct {
@@ -50,13 +54,22 @@ type ContextUsage struct {
 	Limit  int
 }
 
-// Cost is a provider-reported dollar figure. Known is false for providers
-// that don't track cost at all — USD is meaningless when Known is false.
-// There is no estimation here: a provider either reports an exact cost or
-// reports none.
+type CostSource int
+
+const (
+	// CostSourceExact must remain the zero value so a provider reporting a
+	// native cost without setting Source is never mislabeled estimated.
+	CostSourceExact CostSource = iota
+	CostSourceEstimated
+)
+
+// Cost is a session's dollar figure. Known is false when no exact cost is
+// reported AND no estimate could be produced. Source distinguishes a
+// provider-reported exact figure from a pricing-catalog estimate.
 type Cost struct {
-	USD   float64
-	Known bool
+	USD    float64
+	Known  bool
+	Source CostSource
 }
 
 type SessionContext struct {
@@ -88,4 +101,20 @@ type Watchable interface {
 // patterns rather than one root, so it doesn't implement this.
 type PathReporter interface {
 	CheckedPath() string
+}
+
+// PlanInfo is an account-level subscription tier (e.g. "Max", "Pro",
+// "Plus"). Tier strings are provider-specific display values, not
+// normalized across providers. Known is false when no local plan signal
+// was found — never guess a tier.
+type PlanInfo struct {
+	Tier  string
+	Known bool
+}
+
+// PlanReporter is implemented by providers that can read a local,
+// non-secret account plan-tier signal. Checked via type-assertion in
+// engine.ProviderStatuses, same pattern as PathReporter.
+type PlanReporter interface {
+	Plan() PlanInfo
 }
