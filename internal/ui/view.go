@@ -11,24 +11,57 @@ import (
 	"github.com/codebyNJ/minimo/internal/provider"
 )
 
-const headerHeight = 3
-
 var headerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginBottom(1)
 
 func (m Model) View() string {
 	if m.statsView {
 		return renderStats(m.stats)
 	}
-	header := renderHeader(m.rows, m.showHistory) + "\n" + renderProviderStatus(m.statuses)
-	out := headerStyle.Render(header) + "\n" +
-		renderProviderPanels(m.statuses, m.rows) + "\n" +
-		m.table.View()
-	if m.expandedID != "" {
-		if c, ok := expandedContext(m); ok {
-			out += "\n" + renderExpandDetail(c, planForProvider(m.statuses, c.Session.Provider))
-		}
+	out := m.dashboardChrome() + "\n" + m.table.View()
+	if d := m.expandDetail(); d != "" {
+		out += "\n" + d
 	}
 	return out
+}
+
+// dashboardChrome is everything rendered above the session table — the header
+// block and the provider panels. View and relayout share it so the table is
+// sized to exactly fill the rows the chrome leaves, instead of a stale
+// constant that ignored the panels and pushed the top off-screen.
+func (m Model) dashboardChrome() string {
+	header := renderHeader(m.rows, m.showHistory) + "\n" + renderProviderStatus(m.statuses)
+	return headerStyle.Render(header) + "\n" + renderProviderPanels(m.statuses, m.rows)
+}
+
+// expandDetail is the optional per-session detail block shown below the table,
+// or "" when nothing is expanded.
+func (m Model) expandDetail() string {
+	if m.expandedID == "" {
+		return ""
+	}
+	c, ok := expandedContext(m)
+	if !ok {
+		return ""
+	}
+	return renderExpandDetail(c, planForProvider(m.statuses, c.Session.Provider))
+}
+
+// relayout sizes the table to the terminal: full width, and the height left
+// over after the chrome (and any expand detail) so header + panels + table
+// together fill exactly m.height and never overflow the alt-screen.
+func (m *Model) relayout() {
+	if m.width > 0 {
+		m.table.SetWidth(m.width)
+	}
+	used := lipgloss.Height(m.dashboardChrome())
+	if d := m.expandDetail(); d != "" {
+		used += lipgloss.Height(d)
+	}
+	h := m.height - used
+	if h < 1 {
+		h = 1
+	}
+	m.table.SetHeight(h)
 }
 
 func expandedContext(m Model) (provider.SessionContext, bool) {

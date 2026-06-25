@@ -11,8 +11,9 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.table.SetWidth(msg.Width)
-		m.table.SetHeight(msg.Height - headerHeight)
+		m.width = msg.Width
+		m.height = msg.Height
+		m.relayout()
 		return m, nil
 
 	case RefreshMsg:
@@ -21,6 +22,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.statsView {
 			m.stats = usage.Build(m.store.All(), time.Now())
 		}
+		m.relayout()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -37,9 +39,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHistory = !m.showHistory
 			m.rows = visibleRows(m.store, m.showHistory)
 			m.table.SetRows(rowsToTableRows(m.rows))
+			m.relayout()
 			return m, nil
 		case "enter":
 			m.expandedID = toggleExpand(m.expandedID, selectedSessionID(m))
+			m.relayout()
 			return m, nil
 		}
 	}

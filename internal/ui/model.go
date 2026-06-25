@@ -20,6 +20,8 @@ type Model struct {
 	expandedID  string
 	statsView   bool
 	stats       usage.Report
+	width       int
+	height      int
 }
 
 func New(store *engine.StateStore, statuses []engine.ProviderStatus) Model {
