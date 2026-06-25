@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/codebyNJ/minimo/internal/logging"
 	"github.com/codebyNJ/minimo/internal/provider"
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
@@ -20,7 +21,22 @@ func init() {
 type ClaudeCodeProvider struct {
 	mu       sync.Mutex
 	sessions map[string]*sessionState
+
+	// liveMu guards a short-lived cache of the live-session registry.
+	// loadLiveRegistry is called once by ListSessions and once by every
+	// ReadContext, so without this it rescanned ~/.claude/sessions N+1 times
+	// per poll. The cache is its own lock because loadLiveRegistry runs both
+	// with and without p.mu held (a separate leaf lock avoids any ordering
+	// hazard).
+	liveMu    sync.Mutex
+	liveCache map[string]liveEntry
+	liveAt    time.Time
 }
+
+// liveCacheTTL bounds how long a cached live registry is reused. A poll cycle
+// (ListSessions + all ReadContexts) completes well within this window, so the
+// registry is scanned once per refresh instead of N+1 times.
+const liveCacheTTL = time.Second
 
 func New() *ClaudeCodeProvider {
 	return &ClaudeCodeProvider{sessions: make(map[string]*sessionState)}
@@ -43,7 +59,7 @@ func (p *ClaudeCodeProvider) home() string {
 }
 
 func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home(), "projects") }
-func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home(), "sessions") }
+func (p *ClaudeCodeProvider) liveDir() string     { return filepath.Join(p.home(), "sessions") }
 
 func (p *ClaudeCodeProvider) CheckedPath() string { return p.projectsDir() }
 
@@ -60,6 +76,24 @@ type liveEntry struct {
 }
 
 func (p *ClaudeCodeProvider) loadLiveRegistry() map[string]liveEntry {
+	p.liveMu.Lock()
+	if p.liveCache != nil && time.Since(p.liveAt) < liveCacheTTL {
+		cached := p.liveCache
+		p.liveMu.Unlock()
+		return cached
+	}
+	p.liveMu.Unlock()
+
+	out := p.scanLiveRegistry()
+
+	p.liveMu.Lock()
+	p.liveCache = out
+	p.liveAt = time.Now()
+	p.liveMu.Unlock()
+	return out
+}
+
+func (p *ClaudeCodeProvider) scanLiveRegistry() map[string]liveEntry {
 	out := make(map[string]liveEntry)
 	entries, err := os.ReadDir(p.liveDir())
 	if err != nil {
@@ -129,6 +163,39 @@ func (p *ClaudeCodeProvider) ListSessions() ([]provider.SessionInfo, error) {
 	return out, nil
 }
 
+// applySubagents reads the session's subagent sub-transcripts
+// (<projectDir>/<sessionID>/subagents/*.jsonl) and folds their token usage into
+// the session totals, so a session that spawned subagents reports its full
+// cost instead of just the main-transcript portion. Incremental per-file
+// cursors keep each poll cheap. Caller holds p.mu.
+func (p *ClaudeCodeProvider) applySubagents(state *sessionState) {
+	subDir := filepath.Join(filepath.Dir(state.cursor.Path), state.id, "subagents")
+	entries, err := os.ReadDir(subDir)
+	if err != nil {
+		return // no subagents directory is the common case
+	}
+	if state.subCursors == nil {
+		state.subCursors = make(map[string]*tailreader.Cursor)
+	}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		path := filepath.Join(subDir, e.Name())
+		cur := state.subCursors[path]
+		if cur == nil {
+			cur = &tailreader.Cursor{Path: path}
+			state.subCursors[path] = cur
+		}
+		data, err := cur.ReadNew()
+		if err != nil {
+			logging.Debugf("claudecode: subagent read %s: %v", path, err)
+			continue
+		}
+		state.applySubagentTokens(data)
+	}
+}
+
 func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionContext, error) {
 	p.mu.Lock()
 	state, ok := p.sessions[sessionID]
@@ -145,6 +212,7 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	state.applyNew(data)
+	p.applySubagents(state)
 	live := p.loadLiveRegistry()
 	return &provider.SessionContext{
 		Session: state.info(p.Name(), p.statusFor(sessionID, state, live)),

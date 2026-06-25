@@ -36,6 +36,45 @@ func TestEstimatedCostLeavesExactUntouched(t *testing.T) {
 	}
 }
 
+type fakeProv struct{ name string }
+
+func (f fakeProv) Name() string                                         { return f.name }
+func (f fakeProv) Detect() bool                                         { return false }
+func (f fakeProv) ListSessions() ([]provider.SessionInfo, error)        { return nil, nil }
+func (f fakeProv) ReadContext(string) (*provider.SessionContext, error) { return nil, nil }
+
+func TestFilterEnabledRestrictsProviders(t *testing.T) {
+	all := []provider.Provider{fakeProv{"claude-code"}, fakeProv{"opencode"}, fakeProv{"codex"}}
+	if got := filterEnabled(all, nil); len(got) != 3 {
+		t.Fatalf("empty enabled = %d providers, want all 3", len(got))
+	}
+	got := filterEnabled(all, []string{"claude-code"})
+	if len(got) != 1 || got[0].Name() != "claude-code" {
+		t.Fatalf("enabled [claude-code] = %v, want just claude-code", got)
+	}
+}
+
+func TestStoreRetainEvictsOnlyEnumeratedAndUnseen(t *testing.T) {
+	s := NewStateStore()
+	s.Put("keep", provider.SessionContext{Session: provider.SessionInfo{ID: "keep", Provider: "claude-code"}})
+	s.Put("gone", provider.SessionContext{Session: provider.SessionInfo{ID: "gone", Provider: "claude-code"}})
+	s.Put("other", provider.SessionContext{Session: provider.SessionInfo{ID: "other", Provider: "opencode"}})
+
+	// claude-code was enumerated this cycle and only "keep" was seen; opencode
+	// was NOT enumerated (e.g. transient error), so "other" must survive.
+	s.Retain(map[string]bool{"keep": true}, map[string]bool{"claude-code": true})
+
+	if _, ok := s.Get("keep"); !ok {
+		t.Fatal("seen session must be retained")
+	}
+	if _, ok := s.Get("gone"); ok {
+		t.Fatal("unseen session from an enumerated provider must be evicted")
+	}
+	if _, ok := s.Get("other"); !ok {
+		t.Fatal("session from a non-enumerated provider must be kept (no flicker on transient errors)")
+	}
+}
+
 func TestBackfillContextLimitFromCatalog(t *testing.T) {
 	cat, _ := pricing.LoadFromBytes([]byte(`{"m1":{"input_cost_per_token":0.000001,"max_input_tokens":200000}}`))
 	c := provider.SessionContext{

@@ -47,6 +47,28 @@ func TestParseArgsStats(t *testing.T) {
 	}
 }
 
+func TestParseArgsSubcommandAfterGlobalFlag(t *testing.T) {
+	// Regression: a global flag before the subcommand must not hide it.
+	// `ctx -c cfg.yaml status` used to fall through and open the TUI.
+	f, err := parseArgs([]string{"-c", "cfg.yaml", "status"})
+	if err != nil || f.subcommand != "status" || f.config != "cfg.yaml" {
+		t.Fatalf("-c cfg.yaml status: %+v err=%v, want subcommand=status config=cfg.yaml", f, err)
+	}
+	// Flag on either side of the subcommand both work.
+	f2, err := parseArgs([]string{"--no-color", "status", "--watch"})
+	if err != nil || f2.subcommand != "status" || !f2.noColor || !f2.watch {
+		t.Fatalf("--no-color status --watch: %+v err=%v", f2, err)
+	}
+}
+
+func TestParseArgsBareWordAsFlagValueNotSubcommand(t *testing.T) {
+	// A config path that happens to be "status" is a value, not the subcommand.
+	f, err := parseArgs([]string{"-c", "status"})
+	if err != nil || f.subcommand != "" || f.config != "status" {
+		t.Fatalf("-c status: %+v err=%v, want TUI with config=status", f, err)
+	}
+}
+
 func TestApplyOverrides(t *testing.T) {
 	base := config.Default()
 	f := cliFlags{update: 5000, provider: "codex"}

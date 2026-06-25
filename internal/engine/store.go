@@ -37,3 +37,20 @@ func (s *StateStore) All() []provider.SessionContext {
 	}
 	return out
 }
+
+// Retain drops sessions that are gone. An entry is removed only when its
+// provider was successfully enumerated this cycle (its name is in
+// enumeratedProviders) yet the session id was not seen — i.e. its transcript
+// or DB row is genuinely gone. Sessions from a provider that failed or was not
+// detected this cycle are kept, so a transient read error doesn't flicker the
+// whole list. This caps the store at live on-disk sessions instead of growing
+// for every session ever seen.
+func (s *StateStore) Retain(seen, enumeratedProviders map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, c := range s.items {
+		if !seen[id] && enumeratedProviders[c.Session.Provider] {
+			delete(s.items, id)
+		}
+	}
+}
