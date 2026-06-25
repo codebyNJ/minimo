@@ -33,14 +33,34 @@ func registerCommon(fs *flag.FlagSet, f *cliFlags) {
 	fs.BoolVar(&f.defaultConfig, "default-config", false, "print default config YAML and exit")
 }
 
+// valueFlags consume the argument that follows them, so a bare "status" or
+// "stats" immediately after one of these is that flag's value (e.g. a config
+// path), not the subcommand.
+var valueFlags = map[string]bool{
+	"-c": true, "--config": true,
+	"-u": true, "--update": true,
+	"--provider": true,
+	"--theme":    true,
+}
+
 func parseArgs(args []string) (cliFlags, error) {
 	var f cliFlags
 
-	// Subcommand is the first non-flag argument when it is a recognized one.
-	rest := args
-	if len(args) > 0 && (args[0] == "status" || args[0] == "stats") {
-		f.subcommand = args[0]
-		rest = args[1:]
+	// The subcommand is the first bare "status"/"stats" token wherever it
+	// appears, so global flags may sit on either side of it
+	// (e.g. `ctx -c cfg.yaml status --watch`). Everything else is handed to
+	// the flag parser. Previously only args[0] was checked, so any leading
+	// global flag caused the subcommand to be missed and the TUI to open.
+	var rest []string
+	prev := ""
+	for _, a := range args {
+		if f.subcommand == "" && (a == "status" || a == "stats") && !valueFlags[prev] {
+			f.subcommand = a
+			prev = a
+			continue
+		}
+		rest = append(rest, a)
+		prev = a
 	}
 
 	fs := flag.NewFlagSet("ctx", flag.ContinueOnError)
