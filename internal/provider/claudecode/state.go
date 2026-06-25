@@ -23,6 +23,10 @@ type sessionState struct {
 	contextTokens       int
 	files               map[string]struct{}
 	cursor              tailreader.Cursor
+	// subCursors tracks one incremental cursor per subagent transcript
+	// (<session>/subagents/*.jsonl) so their token usage is folded into this
+	// session's totals without re-reading the whole file every poll.
+	subCursors map[string]*tailreader.Cursor
 }
 
 var fileTools = map[string]bool{"Read": true, "Edit": true, "Write": true}
@@ -61,6 +65,25 @@ func (s *sessionState) applyNew(data []byte) {
 				}
 			}
 		}
+	}
+}
+
+// applySubagentTokens folds a subagent sub-transcript's assistant-turn token
+// usage into this session's totals. It intentionally ignores model, cwd,
+// label, timestamps, files, and contextTokens — those describe the parent
+// conversation; a subagent only adds token (and therefore cost) volume that
+// would otherwise be undercounted.
+func (s *sessionState) applySubagentTokens(data []byte) {
+	for _, l := range parseLines(data) {
+		if l.Type != "assistant" {
+			continue
+		}
+		u := l.Message.Usage
+		s.tokens += u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+		s.inputTokens += u.InputTokens
+		s.outputTokens += u.OutputTokens
+		s.cacheReadTokens += u.CacheReadInputTokens
+		s.cacheCreationTokens += u.CacheCreationInputTokens
 	}
 }
 

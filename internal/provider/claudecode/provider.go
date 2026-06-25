@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/codebyNJ/minimo/internal/logging"
 	"github.com/codebyNJ/minimo/internal/provider"
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
@@ -129,6 +130,39 @@ func (p *ClaudeCodeProvider) ListSessions() ([]provider.SessionInfo, error) {
 	return out, nil
 }
 
+// applySubagents reads the session's subagent sub-transcripts
+// (<projectDir>/<sessionID>/subagents/*.jsonl) and folds their token usage into
+// the session totals, so a session that spawned subagents reports its full
+// cost instead of just the main-transcript portion. Incremental per-file
+// cursors keep each poll cheap. Caller holds p.mu.
+func (p *ClaudeCodeProvider) applySubagents(state *sessionState) {
+	subDir := filepath.Join(filepath.Dir(state.cursor.Path), state.id, "subagents")
+	entries, err := os.ReadDir(subDir)
+	if err != nil {
+		return // no subagents directory is the common case
+	}
+	if state.subCursors == nil {
+		state.subCursors = make(map[string]*tailreader.Cursor)
+	}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		path := filepath.Join(subDir, e.Name())
+		cur := state.subCursors[path]
+		if cur == nil {
+			cur = &tailreader.Cursor{Path: path}
+			state.subCursors[path] = cur
+		}
+		data, err := cur.ReadNew()
+		if err != nil {
+			logging.Debugf("claudecode: subagent read %s: %v", path, err)
+			continue
+		}
+		state.applySubagentTokens(data)
+	}
+}
+
 func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionContext, error) {
 	p.mu.Lock()
 	state, ok := p.sessions[sessionID]
@@ -145,6 +179,7 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	state.applyNew(data)
+	p.applySubagents(state)
 	live := p.loadLiveRegistry()
 	return &provider.SessionContext{
 		Session: state.info(p.Name(), p.statusFor(sessionID, state, live)),
