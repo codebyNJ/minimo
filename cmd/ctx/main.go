@@ -295,11 +295,11 @@ func printTable(e *engine.Engine) {
 		if r.Session.LastActive.IsZero() {
 			continue
 		}
-		fmt.Printf("%-12s %-8s %-18s %-10d %-12s %-9s %-10s %-24s %s\n",
+		fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-10s %-24s %s\n",
 			r.Session.Provider,
 			r.Session.Status,
 			format.EmptyDash(format.TruncateRight(r.Session.Model, 18)),
-			r.Tokens.Total,
+			format.FormatCount(r.Tokens.Total),
 			format.FormatContext(r.Context),
 			format.FormatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),
