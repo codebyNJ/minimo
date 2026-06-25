@@ -21,7 +21,22 @@ func init() {
 type ClaudeCodeProvider struct {
 	mu       sync.Mutex
 	sessions map[string]*sessionState
+
+	// liveMu guards a short-lived cache of the live-session registry.
+	// loadLiveRegistry is called once by ListSessions and once by every
+	// ReadContext, so without this it rescanned ~/.claude/sessions N+1 times
+	// per poll. The cache is its own lock because loadLiveRegistry runs both
+	// with and without p.mu held (a separate leaf lock avoids any ordering
+	// hazard).
+	liveMu    sync.Mutex
+	liveCache map[string]liveEntry
+	liveAt    time.Time
 }
+
+// liveCacheTTL bounds how long a cached live registry is reused. A poll cycle
+// (ListSessions + all ReadContexts) completes well within this window, so the
+// registry is scanned once per refresh instead of N+1 times.
+const liveCacheTTL = time.Second
 
 func New() *ClaudeCodeProvider {
 	return &ClaudeCodeProvider{sessions: make(map[string]*sessionState)}
@@ -61,6 +76,24 @@ type liveEntry struct {
 }
 
 func (p *ClaudeCodeProvider) loadLiveRegistry() map[string]liveEntry {
+	p.liveMu.Lock()
+	if p.liveCache != nil && time.Since(p.liveAt) < liveCacheTTL {
+		cached := p.liveCache
+		p.liveMu.Unlock()
+		return cached
+	}
+	p.liveMu.Unlock()
+
+	out := p.scanLiveRegistry()
+
+	p.liveMu.Lock()
+	p.liveCache = out
+	p.liveAt = time.Now()
+	p.liveMu.Unlock()
+	return out
+}
+
+func (p *ClaudeCodeProvider) scanLiveRegistry() map[string]liveEntry {
 	out := make(map[string]liveEntry)
 	entries, err := os.ReadDir(p.liveDir())
 	if err != nil {
