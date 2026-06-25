@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"time"
 )
 
 type jsonlLine struct {
@@ -42,12 +41,4 @@ func parseLines(data []byte) []jsonlLine {
 		lines = append(lines, l)
 	}
 	return lines
-}
-
-func parseTimestamp(s string) (time.Time, bool) {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }

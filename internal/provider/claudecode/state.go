@@ -9,23 +9,27 @@ import (
 )
 
 type sessionState struct {
-	id            string
-	cwd           string
-	label         string
-	model         string
-	startedAt     time.Time
-	lastActive    time.Time
-	tokens        int
-	contextTokens int
-	files         map[string]struct{}
-	cursor        tailreader.Cursor
+	id                  string
+	cwd                 string
+	label               string
+	model               string
+	startedAt           time.Time
+	lastActive          time.Time
+	tokens              int
+	inputTokens         int
+	outputTokens        int
+	cacheReadTokens     int
+	cacheCreationTokens int
+	contextTokens       int
+	files               map[string]struct{}
+	cursor              tailreader.Cursor
 }
 
 var fileTools = map[string]bool{"Read": true, "Edit": true, "Write": true}
 
 func (s *sessionState) applyNew(data []byte) {
 	for _, l := range parseLines(data) {
-		if ts, ok := parseTimestamp(l.Timestamp); ok {
+		if ts, ok := provider.ParseTimestamp(l.Timestamp); ok {
 			if s.startedAt.IsZero() {
 				s.startedAt = ts
 			}
@@ -40,6 +44,10 @@ func (s *sessionState) applyNew(data []byte) {
 		if l.Type == "assistant" {
 			u := l.Message.Usage
 			s.tokens += u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+			s.inputTokens += u.InputTokens
+			s.outputTokens += u.OutputTokens
+			s.cacheReadTokens += u.CacheReadInputTokens
+			s.cacheCreationTokens += u.CacheCreationInputTokens
 			s.contextTokens = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 			if l.Message.Model != "" {
 				s.model = l.Message.Model

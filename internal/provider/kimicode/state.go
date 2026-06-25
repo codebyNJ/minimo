@@ -3,12 +3,16 @@ package kimicode
 import "time"
 
 type sessionState struct {
-	startedAt     time.Time
-	lastActive    time.Time
-	tokens        int
-	contextTokens int
-	contextLimit  int
-	contextKnown  bool
+	startedAt           time.Time
+	lastActive          time.Time
+	tokens              int
+	inputTokens         int
+	outputTokens        int
+	cacheReadTokens     int
+	cacheCreationTokens int
+	contextTokens       int
+	contextLimit        int
+	contextKnown        bool
 }
 
 func (s *sessionState) applyNew(lines []wireLine) {
@@ -18,6 +22,10 @@ func (s *sessionState) applyNew(lines []wireLine) {
 		}
 		if u := l.usage(); u != nil {
 			s.tokens = int(u.total())
+			s.inputTokens = int(u.InputOther)
+			s.outputTokens = int(u.Output)
+			s.cacheReadTokens = int(u.InputCacheRead)
+			s.cacheCreationTokens = int(u.InputCacheCreation)
 		}
 		if ct := l.contextTokens(); ct != nil {
 			s.contextTokens = int(*ct)

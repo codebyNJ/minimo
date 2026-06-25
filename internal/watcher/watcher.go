@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/codebyNJ/minimo/internal/logging"
 )
 
 type Watcher struct {
@@ -67,7 +69,11 @@ func (w *Watcher) Run(ctx context.Context) {
 func (w *Watcher) handle(ev fsnotify.Event) {
 	if ev.Op&fsnotify.Create != 0 {
 		if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-			_ = w.fsw.Add(ev.Name)
+			if err := w.fsw.Add(ev.Name); err != nil {
+				// New subdirectory won't be watched; sessions created under it
+				// surface on the next poll tick instead of immediately.
+				logging.Debugf("watcher: add %s failed: %v", ev.Name, err)
+			}
 			return
 		}
 	}
@@ -81,9 +87,29 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		t.Stop()
 	}
 	path := ev.Name
-	w.timers[path] = time.AfterFunc(w.debounce, func() {
+	// Delete the entry when the timer fires; otherwise w.timers accumulates one
+	// dead entry per distinct path touched and grows unbounded over a long
+	// session monitoring hundreds of JSONL files. The fired timer only removes
+	// its own entry — if a newer write already replaced it, that newer timer
+	// stays installed so rapid writes keep coalescing.
+	var t *time.Timer
+	t = time.AfterFunc(w.debounce, func() {
+		w.mu.Lock()
+		if w.timers[path] == t {
+			delete(w.timers, path)
+		}
+		w.mu.Unlock()
 		w.Events <- path
 	})
+	w.timers[path] = t
+}
+
+// pendingTimers reports how many debounce timers are currently tracked. Used
+// by tests to assert the map does not leak after timers fire.
+func (w *Watcher) pendingTimers() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.timers)
 }
 
 func (w *Watcher) Close() error {

@@ -1,0 +1,10 @@
+services:
+  ctx:
+    build: .
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${HOME}/.claude:/home/nonroot/.claude:ro
+      - ${HOME}/.claude.json:/home/nonroot/.claude.json:ro
+      - ${HOME}/.codex:/home/nonroot/.codex:ro
+      - ./docker-config.yaml:/home/nonroot/.ctx/config.yaml:ro

@@ -1,11 +1,9 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/codebyNJ/minimo/internal/engine"
 	"github.com/codebyNJ/minimo/internal/format"
@@ -38,11 +36,9 @@ func rowsToTableRows(rows []provider.SessionContext) []table.Row {
 			r.Session.Provider,
 			format.EmptyDash(format.TruncateRight(r.Session.Model, 18)),
 			renderContextBar(r.Context),
-			fmt.Sprintf("%d", r.Tokens.Total),
+			format.FormatCount(r.Tokens.Total),
 			format.FormatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),
-			format.Truncate(r.Session.CWD, 24),
-			r.Session.Label,
 		})
 	}
 	return out
@@ -57,14 +53,12 @@ func tableColumns() []table.Column {
 		{Title: "LIFETIME", Width: 10},
 		{Title: "COST", Width: 9},
 		{Title: "LAST", Width: 10},
-		{Title: "CWD", Width: 24},
-		{Title: "LABEL", Width: 30},
 	}
 }
 
 func tableStyles() table.Styles {
 	s := table.DefaultStyles()
-	s.Header = s.Header.Bold(true).Foreground(lipgloss.Color("117"))
-	s.Selected = s.Selected.Background(lipgloss.Color("237"))
+	s.Header = s.Header.Bold(true).Foreground(active.Header)
+	s.Selected = s.Selected.Background(active.Empty)
 	return s
 }

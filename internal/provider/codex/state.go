@@ -9,21 +9,25 @@ import (
 )
 
 type sessionState struct {
-	id            string
-	cwd           string
-	model         string
-	startedAt     time.Time
-	lastActive    time.Time
-	tokens        int
-	contextTokens int
-	contextLimit  int
-	contextKnown  bool
-	cursor        tailreader.Cursor
+	id                  string
+	cwd                 string
+	model               string
+	startedAt           time.Time
+	lastActive          time.Time
+	tokens              int
+	inputTokens         int
+	outputTokens        int
+	cacheReadTokens     int
+	cacheCreationTokens int
+	contextTokens       int
+	contextLimit        int
+	contextKnown        bool
+	cursor              tailreader.Cursor
 }
 
 func (s *sessionState) applyNew(data []byte) {
 	for _, l := range parseRolloutLines(data) {
-		if ts, ok := parseTimestamp(l.Timestamp); ok {
+		if ts, ok := provider.ParseTimestamp(l.Timestamp); ok {
 			if s.startedAt.IsZero() {
 				s.startedAt = ts
 			}
@@ -59,6 +63,11 @@ func (s *sessionState) applyNew(data []byte) {
 				continue
 			}
 			s.tokens = int(em.Info.TotalTokenUsage.TotalTokens)
+			tot := em.Info.TotalTokenUsage
+			s.inputTokens = int(tot.InputTokens)
+			s.cacheReadTokens = int(tot.CachedInputTokens)
+			s.outputTokens = int(tot.OutputTokens + tot.ReasoningOutputTokens)
+			// Codex reports no cache-creation category; leave it zero.
 			last := em.Info.LastTokenUsage
 			s.contextTokens = int(last.InputTokens + last.CachedInputTokens)
 			if em.Info.ModelContextWindow != nil {

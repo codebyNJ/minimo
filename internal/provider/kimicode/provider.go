@@ -11,8 +11,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -91,7 +89,7 @@ func (p *KimiCodeProvider) findWireLogs() map[string]string {
 }
 
 func (p *KimiCodeProvider) statusFor(s *sessionState) provider.SessionStatus {
-	if !s.lastActive.IsZero() && time.Since(s.lastActive) < idleThreshold {
+	if !s.lastActive.IsZero() && time.Since(s.lastActive) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded
@@ -151,7 +149,14 @@ func (p *KimiCodeProvider) ReadContext(sessionID string) (*provider.SessionConte
 	}
 	return &provider.SessionContext{
 		Session: p.info(sessionID, &ts.state),
-		Tokens:  provider.TokenUsage{Total: ts.state.tokens, Source: provider.TokenSourceExact},
+		Tokens: provider.TokenUsage{
+			Total:         ts.state.tokens,
+			Input:         ts.state.inputTokens,
+			Output:        ts.state.outputTokens,
+			CacheRead:     ts.state.cacheReadTokens,
+			CacheCreation: ts.state.cacheCreationTokens,
+			Source:        provider.TokenSourceExact,
+		},
 		Context: provider.ContextUsage{
 			Tokens: ts.state.contextTokens,
 			Known:  ts.state.contextKnown,

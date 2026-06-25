@@ -2,6 +2,8 @@ package format
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/codebyNJ/minimo/internal/provider"
 )
@@ -15,7 +17,13 @@ func EmptyDash(s string) string {
 
 func FormatCount(n int) string {
 	switch {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.1fB", float64(n)/1_000_000_000)
 	case n >= 1_000_000:
+		// 999.5M+ would round up to "1000.0M"; promote to "1.0B".
+		if float64(n)/1_000_000 >= 999.5 {
+			return fmt.Sprintf("%.1fB", float64(n)/1_000_000_000)
+		}
 		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	case n >= 1_000:
 		// 999,500–999,999 would round up to "1000K"; promote to "1.0M".
@@ -26,6 +34,23 @@ func FormatCount(n int) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+// FormatDuration renders a span as compact "Xh YYm" / "Ym" / "Ys" for the
+// usage report. Zero or negative renders "0m".
+func FormatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0m"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	h := int(d / time.Hour)
+	m := int((d % time.Hour) / time.Minute)
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm", h, m)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
 func FormatContext(c provider.ContextUsage) string {
@@ -42,7 +67,18 @@ func FormatCost(c provider.Cost) string {
 	if !c.Known {
 		return "-"
 	}
-	return fmt.Sprintf("$%.4f", c.USD)
+	prefix := "$"
+	if c.Source == provider.CostSourceEstimated {
+		prefix = "~$"
+	}
+	// Dollar-scale figures read better — and fit the COST column — at 2
+	// decimals; sub-dollar costs keep 4 so they stay meaningful. Without this
+	// an estimate like 405.4710 rendered "~$405.4710" (10 chars) and got
+	// truncated to "~$405.47…" in the table.
+	if c.USD >= 1 || c.USD <= -1 {
+		return fmt.Sprintf("%s%.2f", prefix, c.USD)
+	}
+	return fmt.Sprintf("%s%.4f", prefix, c.USD)
 }
 
 func Truncate(s string, n int) string {
@@ -57,4 +93,16 @@ func TruncateRight(s string, n int) string {
 		return s
 	}
 	return s[:n-3] + "..."
+}
+
+// PrettifyTier turns a raw tier token ("team_premium") into a display string
+// ("Team Premium"): underscores to spaces, each word capitalized.
+func PrettifyTier(s string) string {
+	parts := strings.Split(strings.ReplaceAll(s, "_", " "), " ")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, " ")
 }

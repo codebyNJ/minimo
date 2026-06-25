@@ -13,6 +13,8 @@ type Config struct {
 	PollIntervalSec  int               `yaml:"poll_interval_seconds"`
 	EnabledProviders []string          `yaml:"enabled_providers"`
 	ProviderPaths    map[string]string `yaml:"provider_paths"`
+	Theme            string            `yaml:"theme"`
+	LogLevel         string            `yaml:"log_level"`
 }
 
 func Default() Config {
@@ -39,10 +41,19 @@ func Load(path string) (Config, error) {
 		}
 		return cfg, err
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := unmarshal(data, &cfg); err != nil {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+func unmarshal(data []byte, c *Config) error {
+	return yaml.Unmarshal(data, c)
+}
+
+// DefaultYAML renders the default config as YAML for `ctx --default-config`.
+func DefaultYAML() ([]byte, error) {
+	return yaml.Marshal(Default())
 }
 
 func (c Config) Debounce() time.Duration {

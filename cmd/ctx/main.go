@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"syscall"
 	"time"
@@ -14,8 +15,9 @@ import (
 
 	"github.com/codebyNJ/minimo/internal/config"
 	"github.com/codebyNJ/minimo/internal/engine"
-	"github.com/codebyNJ/minimo/internal/export"
 	"github.com/codebyNJ/minimo/internal/format"
+	"github.com/codebyNJ/minimo/internal/logging"
+	"github.com/codebyNJ/minimo/internal/pricing"
 	"github.com/codebyNJ/minimo/internal/provider"
 	_ "github.com/codebyNJ/minimo/internal/provider/claudecode"
 	_ "github.com/codebyNJ/minimo/internal/provider/codex"
@@ -23,39 +25,122 @@ import (
 	_ "github.com/codebyNJ/minimo/internal/provider/kimicode"
 	_ "github.com/codebyNJ/minimo/internal/provider/opencode"
 	"github.com/codebyNJ/minimo/internal/ui"
+	"github.com/codebyNJ/minimo/internal/usage"
 	"github.com/codebyNJ/minimo/internal/watcher"
 )
 
+// version is overridden at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
+// applyOverrides layers one-run CLI flag values over the loaded config.
+func applyOverrides(cfg config.Config, f cliFlags) config.Config {
+	if f.update > 0 {
+		cfg.PollIntervalSec = f.update / 1000
+		if cfg.PollIntervalSec < 1 {
+			cfg.PollIntervalSec = 1
+		}
+	}
+	if f.provider != "" {
+		cfg.EnabledProviders = []string{f.provider}
+	}
+	return cfg
+}
+
 func main() {
-	cfg, err := config.Load(config.DefaultPath())
+	f, err := parseArgs(os.Args[1:])
+	if err != nil {
+		os.Exit(2) // flag package already printed the error
+	}
+
+	if f.defaultConfig {
+		data, err := config.DefaultYAML()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		os.Stdout.Write(data)
+		return
+	}
+
+	if f.help {
+		printUsage(os.Stdout)
+		return
+	}
+
+	if f.version {
+		fmt.Println("ctx", version)
+		return
+	}
+
+	configPath := config.DefaultPath()
+	if f.config != "" {
+		configPath = f.config
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: failed to load config:", err)
 		os.Exit(1)
 	}
+
 	for name, path := range cfg.ProviderPaths {
 		provider.SetPathOverride(name, path)
 	}
+	cfg = applyOverrides(cfg, f)
+
+	themeName := cfg.Theme
+	if f.theme != "" {
+		themeName = f.theme
+	}
+	ui.SetTheme(ui.ThemeByName(themeName, f.noColor))
+
+	logLevel := logging.ParseLevel(cfg.LogLevel)
+	if f.debug {
+		logLevel = logging.LevelDebug
+	}
+	logPath := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		logPath = filepath.Join(home, ".ctx", "ctx.log")
+	}
+	logging.Init(logLevel, logPath)
+
 	for _, p := range configprovider.LoadAll(configprovider.DefaultDir()) {
 		provider.Register(p)
 	}
 
-	if len(os.Args) < 2 {
-		runTUI(cfg)
-		return
-	}
-	switch os.Args[1] {
+	catalog := pricing.Load(context.Background())
+
+	switch f.subcommand {
 	case "status":
-		runStatus(os.Args[2:], cfg)
-	case "export":
-		runExport(os.Args[2:], cfg)
+		runStatus(f, cfg, catalog)
+	case "stats":
+		runStats(cfg, catalog)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: ctx [opens TUI] | ctx status [--watch] | ctx export <session-id> [--with-content]")
-		os.Exit(1)
+		runTUI(cfg, catalog)
 	}
 }
 
-func runTUI(cfg config.Config) {
-	e := engine.New(cfg)
+func printUsage(w io.Writer) {
+	fmt.Fprintln(w, `ctx — terminal context monitor for AI coding agents
+
+Usage:
+  ctx [flags]            open the TUI dashboard
+  ctx status [--watch]   print a flat session table (optionally re-rendering)
+  ctx stats              print per-model cost & time usage for 24h/7d/30d
+
+Flags:
+  -c, --config <path>    use an alternate config file
+  -u, --update <ms>      override the poll interval for this run
+      --provider <name>  restrict to one provider (claude-code|opencode|codex|kimi-code)
+      --theme <name>     color theme: default or mono
+      --no-color         disable colored output
+      --debug            write debug logs to ~/.ctx/ctx.log
+      --default-config   print the default config YAML and exit
+  -V, --version          print version and exit
+  -h, --help             show this help and exit`)
+}
+
+func runTUI(cfg config.Config, catalog pricing.Catalog) {
+	e := engine.New(cfg, catalog)
 	if err := e.Refresh(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -70,6 +155,7 @@ func runTUI(cfg config.Config) {
 	go func() {
 		if err := watchLoop(watchCtx, cfg, func() {
 			if err := e.Refresh(); err != nil {
+				logging.Debugf("tui refresh failed, showing prior data: %v", err)
 				return
 			}
 			p.Send(ui.RefreshMsg{})
@@ -87,15 +173,10 @@ func runTUI(cfg config.Config) {
 	}
 }
 
-func runStatus(args []string, cfg config.Config) {
-	watch := false
-	for _, a := range args {
-		if a == "--watch" {
-			watch = true
-		}
-	}
+func runStatus(f cliFlags, cfg config.Config, catalog pricing.Catalog) {
+	watch := f.watch
 
-	e := engine.New(cfg)
+	e := engine.New(cfg, catalog)
 
 	if !watch {
 		if err := e.Refresh(); err != nil {
@@ -109,38 +190,40 @@ func runStatus(args []string, cfg config.Config) {
 	runWatch(e, cfg)
 }
 
-func runExport(args []string, cfg config.Config) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: ctx export <session-id> [--with-content]")
-		os.Exit(1)
-	}
-	sessionID := args[0]
-	withContent := false
-	for _, a := range args[1:] {
-		if a == "--with-content" {
-			withContent = true
-		}
-	}
-
-	e := engine.New(cfg)
+func runStats(cfg config.Config, catalog pricing.Catalog) {
+	e := engine.New(cfg, catalog)
 	if err := e.Refresh(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+	printStats(usage.Build(e.Store.All(), time.Now()))
+}
 
-	ctx, ok := e.Store.Get(sessionID)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "error: unknown session %q\n", sessionID)
-		os.Exit(1)
+// printStats renders the per-model usage report as one flat section per window.
+func printStats(rep usage.Report) {
+	for _, w := range rep.Windows {
+		fmt.Printf("\n== %s (%s) ==\n", w.Window.Name, w.Window.Label)
+		if len(w.Models) == 0 {
+			fmt.Println("  (no activity)")
+			continue
+		}
+		fmt.Printf("%-20s %5s  %-10s %-9s %-9s %6s\n",
+			"MODEL", "SESS", "COST", "TOKENS", "USED", "USE%")
+		for _, m := range w.Models {
+			cost := provider.Cost{USD: m.TotalCost, Known: m.CostKnown}
+			if m.Estimated {
+				cost.Source = provider.CostSourceEstimated
+			}
+			fmt.Printf("%-20s %5d  %-10s %-9s %-9s %5.1f%%\n",
+				format.TruncateRight(m.Model, 20),
+				m.Sessions,
+				format.FormatCost(cost),
+				format.FormatCount(m.Tokens),
+				format.FormatDuration(m.UsedTime),
+				m.UsedFraction*100,
+			)
+		}
 	}
-
-	out := export.Build(ctx, withContent)
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-	fmt.Println(string(data))
 }
 
 func runWatch(e *engine.Engine, cfg config.Config) {
@@ -212,11 +295,11 @@ func printTable(e *engine.Engine) {
 		if r.Session.LastActive.IsZero() {
 			continue
 		}
-		fmt.Printf("%-12s %-8s %-18s %-10d %-12s %-9s %-10s %-24s %s\n",
+		fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-10s %-24s %s\n",
 			r.Session.Provider,
 			r.Session.Status,
 			format.EmptyDash(format.TruncateRight(r.Session.Model, 18)),
-			r.Tokens.Total,
+			format.FormatCount(r.Tokens.Total),
 			format.FormatContext(r.Context),
 			format.FormatCost(r.Cost),
 			r.Session.LastActive.Format("15:04:05"),

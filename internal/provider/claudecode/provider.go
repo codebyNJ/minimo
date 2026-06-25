@@ -13,8 +13,6 @@ import (
 	"github.com/codebyNJ/minimo/internal/tailreader"
 )
 
-const idleThreshold = 30 * time.Second
-
 func init() {
 	provider.Register(New())
 }
@@ -88,7 +86,7 @@ func (p *ClaudeCodeProvider) statusFor(id string, s *sessionState, live map[stri
 	if entry, ok := live[id]; ok && isAlive(entry.PID) {
 		return provider.StatusActive
 	}
-	if !s.lastActive.IsZero() && time.Since(s.lastActive) < idleThreshold {
+	if !s.lastActive.IsZero() && time.Since(s.lastActive) < provider.IdleThreshold {
 		return provider.StatusIdle
 	}
 	return provider.StatusEnded
@@ -150,8 +148,15 @@ func (p *ClaudeCodeProvider) ReadContext(sessionID string) (*provider.SessionCon
 	live := p.loadLiveRegistry()
 	return &provider.SessionContext{
 		Session: state.info(p.Name(), p.statusFor(sessionID, state, live)),
-		Tokens:  provider.TokenUsage{Total: state.tokens, Source: provider.TokenSourceExact},
-		Files:   state.fileRefs(),
+		Tokens: provider.TokenUsage{
+			Total:         state.tokens,
+			Input:         state.inputTokens,
+			Output:        state.outputTokens,
+			CacheRead:     state.cacheReadTokens,
+			CacheCreation: state.cacheCreationTokens,
+			Source:        provider.TokenSourceExact,
+		},
+		Files: state.fileRefs(),
 		Context: provider.ContextUsage{
 			Tokens: state.contextTokens,
 			Known:  state.model != "",
