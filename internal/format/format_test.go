@@ -23,12 +23,12 @@ func TestFormatCountBillions(t *testing.T) {
 
 func TestFormatDuration(t *testing.T) {
 	cases := map[time.Duration]string{
-		0:                              "0m",
-		30 * time.Second:               "30s",
-		5 * time.Minute:                "5m",
-		144 * time.Minute:              "2h24m",
-		9*time.Hour + 40*time.Minute:   "9h40m",
-		34*time.Hour + 7*time.Minute:   "34h07m",
+		0:                            "0m",
+		30 * time.Second:             "30s",
+		5 * time.Minute:              "5m",
+		144 * time.Minute:            "2h24m",
+		9*time.Hour + 40*time.Minute: "9h40m",
+		34*time.Hour + 7*time.Minute: "34h07m",
 	}
 	for d, want := range cases {
 		if got := FormatDuration(d); got != want {

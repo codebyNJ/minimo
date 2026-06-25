@@ -43,7 +43,7 @@ func (p *ClaudeCodeProvider) home() string {
 }
 
 func (p *ClaudeCodeProvider) projectsDir() string { return filepath.Join(p.home(), "projects") }
-func (p *ClaudeCodeProvider) liveDir() string      { return filepath.Join(p.home(), "sessions") }
+func (p *ClaudeCodeProvider) liveDir() string     { return filepath.Join(p.home(), "sessions") }
 
 func (p *ClaudeCodeProvider) CheckedPath() string { return p.projectsDir() }
 
