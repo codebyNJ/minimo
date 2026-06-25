@@ -130,6 +130,18 @@ func toTokenUsage(r sessionRow) provider.TokenUsage {
 	}
 }
 
+// rowCost reports OpenCode's stored cost. OpenCode writes 0 both for
+// genuinely-free turns and for turns it never priced, so a 0 is reported as
+// unknown rather than an exact $0.00 — that lets the engine fall back to a
+// catalog estimate (and avoids showing a misleading "$0.0000" next to millions
+// of tokens). A positive cost is authoritative and kept exact.
+func rowCost(r sessionRow) provider.Cost {
+	if r.cost > 0 {
+		return provider.Cost{USD: r.cost, Known: true, Source: provider.CostSourceExact}
+	}
+	return provider.Cost{Known: false}
+}
+
 func (p *OpenCodeProvider) ReadContext(sessionID string) (*provider.SessionContext, error) {
 	db, err := p.open()
 	if err != nil {
@@ -142,7 +154,7 @@ func (p *OpenCodeProvider) ReadContext(sessionID string) (*provider.SessionConte
 	return &provider.SessionContext{
 		Session: p.toSessionInfo(*r),
 		Tokens:  toTokenUsage(*r),
-		Cost:    provider.Cost{USD: r.cost, Known: true, Source: provider.CostSourceExact},
+		Cost:    rowCost(*r),
 		// Context is left at its zero value (Known: false) — the session
 		// table only has lifetime aggregates, not a latest-turn figure.
 	}, nil

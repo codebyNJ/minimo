@@ -23,3 +23,15 @@ func TestToTokenUsageMapsCategories(t *testing.T) {
 		t.Fatalf("source = %d, want exact", u.Source)
 	}
 }
+
+func TestRowCostKnownOnlyWhenPositive(t *testing.T) {
+	// A positive stored cost is authoritative and exact.
+	if c := rowCost(sessionRow{cost: 1.23}); !c.Known || c.USD != 1.23 || c.Source != provider.CostSourceExact {
+		t.Fatalf("positive cost = %+v, want exact known 1.23", c)
+	}
+	// A zero cost is reported unknown so the engine can estimate it, rather
+	// than showing a misleading exact $0.00.
+	if c := rowCost(sessionRow{cost: 0, tokensInput: 1_000_000}); c.Known {
+		t.Fatalf("zero cost must be unknown, got %+v", c)
+	}
+}
