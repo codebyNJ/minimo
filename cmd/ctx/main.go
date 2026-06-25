@@ -146,7 +146,7 @@ func runTUI(cfg config.Config, catalog pricing.Catalog) {
 		os.Exit(1)
 	}
 
-	m := ui.New(e.Store, engine.ProviderStatuses())
+	m := ui.New(e.Store, engine.ProviderStatuses(cfg.EnabledProviders))
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	watchCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

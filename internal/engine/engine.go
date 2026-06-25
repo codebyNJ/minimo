@@ -39,6 +39,8 @@ func filterEnabled(all []provider.Provider, enabled []string) []provider.Provide
 }
 
 func (e *Engine) Refresh() error {
+	seen := make(map[string]bool)
+	enumerated := make(map[string]bool)
 	for _, p := range e.providers {
 		if !p.Detect() {
 			continue
@@ -50,7 +52,9 @@ func (e *Engine) Refresh() error {
 			logging.Errorf("%s: list sessions failed: %v", p.Name(), err)
 			continue
 		}
+		enumerated[p.Name()] = true
 		for _, s := range sessions {
+			seen[s.ID] = true
 			ctx, err := p.ReadContext(s.ID)
 			if err != nil {
 				logging.Debugf("%s: read context for session %s failed: %v", p.Name(), s.ID, err)
@@ -63,6 +67,9 @@ func (e *Engine) Refresh() error {
 			e.Store.Put(s.ID, *ctx)
 		}
 	}
+	// Evict sessions whose provider was read this cycle but no longer lists
+	// them, so the store tracks live sessions rather than growing forever.
+	e.Store.Retain(seen, enumerated)
 	return nil
 }
 
@@ -100,12 +107,15 @@ type ProviderStatus struct {
 	Plan        provider.PlanInfo
 }
 
-// ProviderStatuses reports detection status for every registered
-// provider (the full global registry, not filtered by enabled_providers)
-// so the TUI can show which harnesses ctx found on this machine.
-func ProviderStatuses() []ProviderStatus {
+// ProviderStatuses reports detection status for the registered providers so
+// the TUI can show which harnesses ctx found. With no enabled filter it
+// reports every provider (the "what's installed on this machine" view); when
+// enabled is non-empty (e.g. --provider or config), it reports only those, so
+// the panels match the sessions actually being monitored instead of showing
+// the unrelated providers as "not found".
+func ProviderStatuses(enabled []string) []ProviderStatus {
 	var out []ProviderStatus
-	for _, p := range provider.All() {
+	for _, p := range filterEnabled(provider.All(), enabled) {
 		status := ProviderStatus{Name: p.Name(), Detected: p.Detect()}
 		if pr, ok := p.(provider.PathReporter); ok {
 			status.CheckedPath = pr.CheckedPath()
