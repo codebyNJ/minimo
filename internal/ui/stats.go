@@ -20,6 +20,7 @@ var statsTitle = lipgloss.NewStyle().Bold(true)
 func renderStats(rep usage.Report) string {
 	var b strings.Builder
 	fmt.Fprintln(&b, headerStyle.Render("ctx — usage stats · s dashboard · q quit"))
+	hasEstimated := false
 	for _, w := range rep.Windows {
 		fmt.Fprintf(&b, "\n%s\n", statsTitle.Render(fmt.Sprintf("%s (%s)", w.Window.Name, w.Window.Label)))
 		if len(w.Models) == 0 {
@@ -33,6 +34,7 @@ func renderStats(rep usage.Report) string {
 			cost := provider.Cost{USD: m.TotalCost, Known: m.CostKnown}
 			if m.Estimated {
 				cost.Source = provider.CostSourceEstimated
+				hasEstimated = true
 			}
 			// Columns up to USED are fixed-width plain text; the bar (which
 			// carries color escapes) and the trailing percent come last, where
@@ -47,6 +49,9 @@ func renderStats(rep usage.Report) string {
 				m.UsedFraction*100,
 			)
 		}
+	}
+	if hasEstimated {
+		fmt.Fprintln(&b, panelLabel.Render("\n~ costs prefixed with ~ are API-equivalent estimates — subscription users pay a flat monthly rate, not per token"))
 	}
 	return b.String()
 }

@@ -22,7 +22,7 @@ func TestAggregateForSumsCostAndCounts(t *testing.T) {
 		ctxWith("claude-code", 0.30, true, 0, 0, false),
 		ctxWith("opencode", 1.00, true, 0, 0, false),
 	}
-	a := aggregateFor("claude-code", rows)
+	a := aggregateFor("claude-code", rows, rows)
 	if a.Count != 2 {
 		t.Fatalf("count = %d, want 2", a.Count)
 	}
@@ -36,7 +36,7 @@ func TestAggregateForSumsCostAndCounts(t *testing.T) {
 
 func TestAggregateForNoContextKnown(t *testing.T) {
 	rows := []provider.SessionContext{ctxWith("codex", 0, false, 0, 0, false)}
-	a := aggregateFor("codex", rows)
+	a := aggregateFor("codex", rows, rows)
 	if a.AvgKnown {
 		t.Fatal("avg must be unknown when no session has known context")
 	}
@@ -47,7 +47,7 @@ func TestRenderProviderPanelsIncludesNames(t *testing.T) {
 		{Name: "claude-code", Detected: true},
 		{Name: "codex", Detected: false, CheckedPath: "/home/u/.codex"},
 	}
-	out := renderProviderPanels(statuses, nil)
+	out := renderProviderPanels(statuses, nil, nil)
 	if !strings.Contains(out, "claude-code") || !strings.Contains(out, "codex") {
 		t.Fatal("panel output must name every provider")
 	}

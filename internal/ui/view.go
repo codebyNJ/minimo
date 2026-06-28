@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -30,7 +31,9 @@ func (m Model) View() string {
 // constant that ignored the panels and pushed the top off-screen.
 func (m Model) dashboardChrome() string {
 	header := renderHeader(m.rows, m.showHistory) + "\n" + renderProviderStatus(m.statuses)
-	return headerStyle.Render(header) + "\n" + renderProviderPanels(m.statuses, m.rows)
+	// Pass store.All() separately so the 5h rolling-window count in the
+	// panels stays accurate even when the table is filtered to active/idle only.
+	return headerStyle.Render(header) + "\n" + renderProviderPanels(m.statuses, m.rows, m.store.All())
 }
 
 // expandDetail is the optional per-session detail block shown below the table,
@@ -88,34 +91,98 @@ var detailStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).MarginTo
 
 func renderExpandDetail(c provider.SessionContext, plan provider.PlanInfo) string {
 	lines := []string{}
+
+	// Plan line — flag estimated costs right next to the tier so users aren't
+	// confused about whether they're seeing a real charge.
 	if plan.Known {
-		lines = append(lines, fmt.Sprintf("plan: %s", plan.Tier))
+		planLine := fmt.Sprintf("plan: %s", format.PrettifyTier(plan.Tier))
+		if c.Cost.Known && c.Cost.Source == provider.CostSourceEstimated {
+			planLine += "  ·  cost is API-equivalent (not a subscription charge)"
+		}
+		lines = append(lines, planLine)
+	} else if c.Cost.Known && c.Cost.Source == provider.CostSourceEstimated {
+		lines = append(lines, "cost shown is API-equivalent, not a real charge")
 	}
+
+	// Token breakdown
 	lines = append(lines,
 		fmt.Sprintf("tokens: in %d / out %d / cache-r %d / cache-c %d",
 			c.Tokens.Input, c.Tokens.Output, c.Tokens.CacheRead, c.Tokens.CacheCreation),
+	)
+
+	// Session elapsed + burn rate (tok/min and $/hr)
+	if !c.Session.StartedAt.IsZero() && !c.Session.LastActive.IsZero() {
+		elapsed := c.Session.LastActive.Sub(c.Session.StartedAt)
+		if elapsed >= time.Minute && c.Tokens.Total > 0 {
+			tokPerMin := float64(c.Tokens.Total) / elapsed.Minutes()
+			burnLine := fmt.Sprintf("elapsed: %s  ·  burn: %.0f tok/min", format.FormatDuration(elapsed), tokPerMin)
+			if c.Cost.Known && c.Cost.USD > 0 && elapsed.Hours() > 0 {
+				burnLine += fmt.Sprintf("  (~$%.3f/hr API-equiv)", c.Cost.USD/elapsed.Hours())
+			}
+			lines = append(lines, burnLine)
+		}
+	}
+
+	// Subscription ROI — unique signal: how many times over you've exceeded
+	// the cost of your flat-rate subscription. Makes the API-equiv number
+	// meaningful instead of alarming.
+	if roi := subscriptionROI(c.Cost, plan); roi != "" {
+		lines = append(lines, roi)
+	}
+
+	lines = append(lines,
 		fmt.Sprintf("cwd: %s", format.EmptyDash(c.Session.CWD)),
 		fmt.Sprintf("label: %s", format.EmptyDash(c.Session.Label)),
 	)
 	return detailStyle.Render(strings.Join(lines, "\n"))
 }
 
+// subscriptionROI returns a human-readable "≈Nx Plan value" string when we
+// have enough signal to make the comparison meaningful: estimated cost, known
+// plan, and a cost large enough to be interesting (>$1). Returns "" otherwise.
+func subscriptionROI(cost provider.Cost, plan provider.PlanInfo) string {
+	if !cost.Known || cost.Source != provider.CostSourceEstimated || !plan.Known || cost.USD < 1 {
+		return ""
+	}
+	var monthly float64
+	switch strings.ToLower(strings.ReplaceAll(plan.Tier, " ", "_")) {
+	case "pro":
+		monthly = 20
+	case "max", "max_5x":
+		monthly = 100
+	case "max_20x":
+		monthly = 200
+	default:
+		return ""
+	}
+	ratio := cost.USD / monthly
+	return fmt.Sprintf("≈%.1f× %s plan value (subscription covers this)", ratio, format.PrettifyTier(plan.Tier))
+}
+
 func renderHeader(rows []provider.SessionContext, showHistory bool) string {
 	active := 0
 	totalCost := 0.0
+	hasEstimated := false
 	for _, r := range rows {
 		if r.Session.Status == provider.StatusActive {
 			active++
 		}
 		if r.Cost.Known {
 			totalCost += r.Cost.USD
+			if r.Cost.Source == provider.CostSourceEstimated {
+				hasEstimated = true
+			}
 		}
 	}
 	scope := "active/idle"
 	if showHistory {
 		scope = "all"
 	}
-	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · $%.2f total · h history · s stats · q quit", len(rows), scope, active, totalCost)
+	costStr := fmt.Sprintf("$%.2f total", totalCost)
+	if hasEstimated {
+		costStr = fmt.Sprintf("~$%.2f API-equiv", totalCost)
+	}
+	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · %s · h history · s stats · q quit", len(rows), scope, active, costStr)
 }
 
 // renderProviderStatus shows every registered provider's detection

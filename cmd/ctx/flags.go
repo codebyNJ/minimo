@@ -14,6 +14,7 @@ type cliFlags struct {
 	defaultConfig bool
 	subcommand    string // "" (TUI), "status", or "stats"
 	watch         bool   // status --watch
+	json          bool   // status --json
 }
 
 // registerCommon wires the top-level flags onto fs, writing into f.
@@ -67,6 +68,7 @@ func parseArgs(args []string) (cliFlags, error) {
 	registerCommon(fs, &f)
 	if f.subcommand == "status" {
 		fs.BoolVar(&f.watch, "watch", false, "re-render on changes")
+		fs.BoolVar(&f.json, "json", false, "output JSON instead of a table")
 	}
 	if err := fs.Parse(rest); err != nil {
 		return f, err

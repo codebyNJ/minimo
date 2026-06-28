@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -124,7 +125,7 @@ func printUsage(w io.Writer) {
 
 Usage:
   ctx [flags]            open the TUI dashboard
-  ctx status [--watch]   print a flat session table (optionally re-rendering)
+  ctx status [--watch] [--json]   print a flat session table (optionally re-rendering)
   ctx stats              print per-model cost & time usage for 24h/7d/30d
 
 Flags:
@@ -174,16 +175,18 @@ func runTUI(cfg config.Config, catalog pricing.Catalog) {
 }
 
 func runStatus(f cliFlags, cfg config.Config, catalog pricing.Catalog) {
-	watch := f.watch
-
 	e := engine.New(cfg, catalog)
 
-	if !watch {
+	if !f.watch {
 		if err := e.Refresh(); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
-		printTable(e)
+		if f.json {
+			printTableJSON(e)
+		} else {
+			printTable(e)
+		}
 		return
 	}
 
@@ -201,6 +204,7 @@ func runStats(cfg config.Config, catalog pricing.Catalog) {
 
 // printStats renders the per-model usage report as one flat section per window.
 func printStats(rep usage.Report) {
+	hasEstimated := false
 	for _, w := range rep.Windows {
 		fmt.Printf("\n== %s (%s) ==\n", w.Window.Name, w.Window.Label)
 		if len(w.Models) == 0 {
@@ -213,6 +217,7 @@ func printStats(rep usage.Report) {
 			cost := provider.Cost{USD: m.TotalCost, Known: m.CostKnown}
 			if m.Estimated {
 				cost.Source = provider.CostSourceEstimated
+				hasEstimated = true
 			}
 			fmt.Printf("%-20s %5d  %-10s %-9s %-9s %5.1f%%\n",
 				format.TruncateRight(m.Model, 20),
@@ -223,6 +228,9 @@ func printStats(rep usage.Report) {
 				m.UsedFraction*100,
 			)
 		}
+	}
+	if hasEstimated {
+		fmt.Println("\n~ costs are API-equivalent estimates — subscription users pay a flat monthly rate, not per token")
 	}
 }
 
@@ -283,28 +291,123 @@ func watchLoop(ctx context.Context, cfg config.Config, onTrigger func()) error {
 	}
 }
 
+// sessionJSON is the shape emitted by ctx status --json. Field names are
+// snake_case so the output is easy to consume with jq and shell scripts.
+type sessionJSON struct {
+	Provider          string  `json:"provider"`
+	ID                string  `json:"id"`
+	Status            string  `json:"status"`
+	Model             string  `json:"model"`
+	TokensTotal       int     `json:"tokens_total"`
+	TokensInput       int     `json:"tokens_input"`
+	TokensOutput      int     `json:"tokens_output"`
+	TokensCacheRead   int     `json:"tokens_cache_read"`
+	TokensCacheCreate int     `json:"tokens_cache_create"`
+	CostUSD           float64 `json:"cost_usd"`
+	CostKnown         bool    `json:"cost_known"`
+	CostEstimated     bool    `json:"cost_estimated"`
+	ContextTokens     int     `json:"context_tokens"`
+	ContextLimit      int     `json:"context_limit"`
+	BurnRateTpm       float64 `json:"burn_rate_tpm,omitempty"` // tok/min; 0 when unknown
+	StartedAt         string  `json:"started_at,omitempty"`
+	LastActive        string  `json:"last_active"`
+	CWD               string  `json:"cwd"`
+	Label             string  `json:"label"`
+}
+
+func printTableJSON(e *engine.Engine) {
+	rows := e.Store.All()
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].Session.LastActive.After(rows[j].Session.LastActive)
+	})
+	out := make([]sessionJSON, 0, len(rows))
+	for _, r := range rows {
+		if r.Session.LastActive.IsZero() {
+			continue
+		}
+		var burnTpm float64
+		if !r.Session.StartedAt.IsZero() {
+			elapsed := r.Session.LastActive.Sub(r.Session.StartedAt)
+			if elapsed >= time.Minute && r.Tokens.Total > 0 {
+				burnTpm = float64(r.Tokens.Total) / elapsed.Minutes()
+			}
+		}
+		startedAt := ""
+		if !r.Session.StartedAt.IsZero() {
+			startedAt = r.Session.StartedAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, sessionJSON{
+			Provider:          r.Session.Provider,
+			ID:                r.Session.ID,
+			Status:            string(r.Session.Status),
+			Model:             r.Session.Model,
+			TokensTotal:       r.Tokens.Total,
+			TokensInput:       r.Tokens.Input,
+			TokensOutput:      r.Tokens.Output,
+			TokensCacheRead:   r.Tokens.CacheRead,
+			TokensCacheCreate: r.Tokens.CacheCreation,
+			CostUSD:           r.Cost.USD,
+			CostKnown:         r.Cost.Known,
+			CostEstimated:     r.Cost.Source == provider.CostSourceEstimated,
+			ContextTokens:     r.Context.Tokens,
+			ContextLimit:      r.Context.Limit,
+			BurnRateTpm:       burnTpm,
+			StartedAt:         startedAt,
+			LastActive:        r.Session.LastActive.UTC().Format(time.RFC3339),
+			CWD:               r.Session.CWD,
+			Label:             r.Session.Label,
+		})
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(out); err != nil {
+		fmt.Fprintln(os.Stderr, "error encoding JSON:", err)
+		os.Exit(1)
+	}
+}
+
 func printTable(e *engine.Engine) {
 	rows := e.Store.All()
 	sort.Slice(rows, func(i, j int) bool {
 		return rows[i].Session.LastActive.After(rows[j].Session.LastActive)
 	})
 
-	fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-10s %-24s %s\n",
-		"PROVIDER", "STATUS", "MODEL", "LIFETIME", "CONTEXT", "COST", "LAST", "CWD", "LABEL")
+	fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-8s %-10s %-24s %s\n",
+		"PROVIDER", "STATUS", "MODEL", "LIFETIME", "CONTEXT", "COST", "RATE", "LAST", "CWD", "LABEL")
+	hasEstimated := false
 	for _, r := range rows {
 		if r.Session.LastActive.IsZero() {
 			continue
 		}
-		fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-10s %-24s %s\n",
+		if r.Cost.Known && r.Cost.Source == provider.CostSourceEstimated {
+			hasEstimated = true
+		}
+		burnRate := "-"
+		if !r.Session.StartedAt.IsZero() {
+			elapsed := r.Session.LastActive.Sub(r.Session.StartedAt)
+			if elapsed >= time.Minute && r.Tokens.Total > 0 {
+				tpm := float64(r.Tokens.Total) / elapsed.Minutes()
+				if tpm >= 1000 {
+					burnRate = fmt.Sprintf("%.0fK/m", tpm/1000)
+				} else {
+					burnRate = fmt.Sprintf("%.0f/m", tpm)
+				}
+			}
+		}
+		fmt.Printf("%-12s %-8s %-18s %-10s %-12s %-9s %-8s %-10s %-24s %s\n",
 			r.Session.Provider,
 			r.Session.Status,
 			format.EmptyDash(format.TruncateRight(r.Session.Model, 18)),
 			format.FormatCount(r.Tokens.Total),
 			format.FormatContext(r.Context),
 			format.FormatCost(r.Cost),
+			burnRate,
 			r.Session.LastActive.Format("15:04:05"),
 			format.Truncate(r.Session.CWD, 24),
 			r.Session.Label,
 		)
+	}
+	if hasEstimated {
+		fmt.Println("\n~ costs are API-equivalent estimates — subscription users pay a flat monthly rate, not per token")
 	}
 }
