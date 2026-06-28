@@ -69,7 +69,7 @@ func main() {
 	}
 
 	if f.version {
-		fmt.Println("ctx", version)
+		fmt.Println("minimo", version)
 		return
 	}
 
@@ -100,7 +100,7 @@ func main() {
 	}
 	logPath := ""
 	if home, err := os.UserHomeDir(); err == nil {
-		logPath = filepath.Join(home, ".ctx", "ctx.log")
+		logPath = filepath.Join(home, ".minimo", "minimo.log")
 	}
 	logging.Init(logLevel, logPath)
 
@@ -121,12 +121,12 @@ func main() {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, `ctx — terminal context monitor for AI coding agents
+	fmt.Fprintln(w, `minimo — terminal dashboard for AI coding agent sessions
 
 Usage:
-  ctx [flags]            open the TUI dashboard
-  ctx status [--watch] [--json]   print a flat session table (optionally re-rendering)
-  ctx stats              print per-model cost & time usage for 24h/7d/30d
+  minimo [flags]                    open the TUI dashboard
+  minimo status [--watch] [--json]  print a flat session table
+  minimo stats                      print per-model cost & time usage for 24h/7d/30d
 
 Flags:
   -c, --config <path>    use an alternate config file
@@ -134,7 +134,7 @@ Flags:
       --provider <name>  restrict to one provider (claude-code|opencode|codex|kimi-code)
       --theme <name>     color theme: default or mono
       --no-color         disable colored output
-      --debug            write debug logs to ~/.ctx/ctx.log
+      --debug            write debug logs to ~/.minimo/minimo.log
       --default-config   print the default config YAML and exit
   -V, --version          print version and exit
   -h, --help             show this help and exit`)

@@ -182,7 +182,7 @@ func renderHeader(rows []provider.SessionContext, showHistory bool) string {
 	if hasEstimated {
 		costStr = fmt.Sprintf("~$%.2f API-equiv", totalCost)
 	}
-	return fmt.Sprintf("ctx — %d sessions (%s) · %d active · %s · h history · s stats · q quit", len(rows), scope, active, costStr)
+	return fmt.Sprintf("minimo — %d sessions (%s) · %d active · %s · h history · s stats · q quit", len(rows), scope, active, costStr)
 }
 
 // renderProviderStatus shows every registered provider's detection

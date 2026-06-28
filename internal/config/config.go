@@ -29,7 +29,7 @@ func DefaultPath() string {
 	if err != nil {
 		home = ""
 	}
-	return filepath.Join(home, ".ctx", "config.yaml")
+	return filepath.Join(home, ".minimo", "config.yaml")
 }
 
 func Load(path string) (Config, error) {

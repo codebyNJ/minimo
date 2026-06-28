@@ -7,9 +7,9 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /ctx ./cmd/ctx
+    -o /minimo ./cmd/ctx
 
 FROM gcr.io/distroless/static-debian12
-COPY --from=builder /ctx /usr/local/bin/ctx
+COPY --from=builder /minimo /usr/local/bin/minimo
 USER nonroot:nonroot
-ENTRYPOINT ["/usr/local/bin/ctx"]
+ENTRYPOINT ["/usr/local/bin/minimo"]

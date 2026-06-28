@@ -1,5 +1,5 @@
 services:
-  ctx:
+  minimo:
     build: .
     stdin_open: true
     tty: true
@@ -7,4 +7,4 @@ services:
       - ${HOME}/.claude:/home/nonroot/.claude:ro
       - ${HOME}/.claude.json:/home/nonroot/.claude.json:ro
       - ${HOME}/.codex:/home/nonroot/.codex:ro
-      - ./docker-config.yaml:/home/nonroot/.ctx/config.yaml:ro
+      - ./docker-config.yaml:/home/nonroot/.minimo/config.yaml:ro

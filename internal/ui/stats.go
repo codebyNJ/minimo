@@ -19,7 +19,7 @@ var statsTitle = lipgloss.NewStyle().Bold(true)
 // never interferes with the fixed-width column math in the data rows.
 func renderStats(rep usage.Report) string {
 	var b strings.Builder
-	fmt.Fprintln(&b, headerStyle.Render("ctx — usage stats · s dashboard · q quit"))
+	fmt.Fprintln(&b, headerStyle.Render("minimo — usage stats · s dashboard · q quit"))
 	hasEstimated := false
 	for _, w := range rep.Windows {
 		fmt.Fprintf(&b, "\n%s\n", statsTitle.Render(fmt.Sprintf("%s (%s)", w.Window.Name, w.Window.Label)))
