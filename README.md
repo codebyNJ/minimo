@@ -2,6 +2,9 @@
 
 Terminal dashboard for AI coding agent sessions (Claude Code, OpenCode) — htop/btop, but for context usage and cost.
 
+<img width="665" height="330" alt="image" src="https://github.com/user-attachments/assets/649b1cb0-04de-402d-a94f-642c4726dc59" />
+
+
 ## Build
 
 ```bash
